@@ -31,13 +31,14 @@ void AnimatedParam::setAnimated(bool on, Ticks at)
 {
     if (on == m_animated)
         return;
-    m_animated = on;
     if (on) {
+        m_animated = true;
         if (m_keys.empty())
             m_keys.push_back({at, m_static, Interp::Linear});
     } else {
         if (!m_keys.empty())
-            m_static = valueAt(at);
+            m_static = valueAt(at);   // still animated here: keep the value under the playhead
+        m_animated = false;
         m_keys.clear();
     }
 }

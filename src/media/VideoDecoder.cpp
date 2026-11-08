@@ -2,6 +2,7 @@
 #include <QFileInfo>
 #include <QThread>
 #include <functional>
+#include <cmath>
 
 namespace rc {
 
@@ -103,6 +104,19 @@ bool VideoDecoder::open(const QString &path, bool allowHardware, QString *error)
         if (error) *error = ff::errorString(r);
         close();
         return false;
+    }
+    {
+        const uint8_t *sd = nullptr;
+#if LIBAVFORMAT_VERSION_MAJOR >= 61
+        const AVPacketSideData *psd = av_packet_side_data_get(st->codecpar->coded_side_data, st->codecpar->nb_coded_side_data, AV_PKT_DATA_DISPLAYMATRIX);
+        sd = psd ? psd->data : nullptr;
+#else
+        sd = av_stream_get_side_data(st, AV_PKT_DATA_DISPLAYMATRIX, nullptr);
+#endif
+        if (sd)
+            m_rotation = ((int)std::lround(-av_display_rotation_get((const int32_t *)sd)) % 360 + 360) % 360;
+        if (m_rotation % 90 != 0)
+            m_rotation = 0;
     }
     if (st->sample_aspect_ratio.num > 0)
         m_par = av_q2d(st->sample_aspect_ratio);
