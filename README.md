@@ -19,7 +19,7 @@ Interface, raccourcis et échanges de projets pensés pour les monteurs qui vien
   normalisation de sonie EBU R128.
 - **Assistant IA** (local) : sous-titres automatiques avec Whisper (faster-whisper), suppression des silences,
   détection de plans, recadrage automatique (vertical/carré), stabilisation.
-- **Export** : 29 préréglages (YouTube, réseaux sociaux, ProRes, DNxHR, H.265, AV1, GIF, audio, séquence d'images),
+- **Export** : 29 préréglages (YouTube, réseaux sociaux, ProRes, DNxHR, H.265, AV1, VP9, NVENC, audio, séquences d'images),
   réglages complets, file de rendu, export des sous-titres (SRT/VTT).
 - **Échange** : import/export FCP7 XML (le format d'échange de Premiere Pro), EDL CMX3600, OpenTimelineIO, export
   FCPXML, import direct des projets `.prproj`.
