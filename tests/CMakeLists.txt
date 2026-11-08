@@ -1,0 +1,5 @@
+find_package(Catch2 REQUIRED)
+file(GLOB TEST_SOURCES CONFIGURE_DEPENDS *.cpp)
+add_executable(raccord-tests ${TEST_SOURCES})
+target_link_libraries(raccord-tests PRIVATE raccord_engine Catch2::Catch2)
+add_test(NAME raccord-tests COMMAND raccord-tests)

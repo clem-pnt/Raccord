@@ -1,0 +1,3 @@
+#pragma once
+#define RACCORD_VERSION "@PROJECT_VERSION@"
+#define RACCORD_NAME "Raccord"
