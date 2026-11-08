@@ -3,3 +3,4 @@ build*/
 *.user
 compile_commands.json
 /test-media/
+.tools/

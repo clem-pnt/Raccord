@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Raccord
+GenericName=Video Editor
+GenericName[fr]=Éditeur vidéo
+Comment=Professional non-linear video editor
+Comment[fr]=Logiciel de montage vidéo professionnel
+Exec=raccord %F
+Icon=raccord
+Terminal=false
+Categories=AudioVideo;Video;AudioVideoEditing;
+Keywords=video;editor;montage;timeline;premiere;
+MimeType=application/x-raccord-project;
+StartupWMClass=raccord

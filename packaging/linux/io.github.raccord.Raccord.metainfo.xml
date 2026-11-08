@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.raccord.Raccord</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>Raccord</name>
+  <summary>Professional non-linear video editor</summary>
+  <summary xml:lang="fr">Logiciel de montage vidéo professionnel</summary>
+  <description>
+    <p>Multitrack timeline, GPU effects with keyframes, Lumetri-style colour grading, scopes, titles, captions with Whisper,
+    audio mixer and loudness normalisation, proxies, render queue and Premiere Pro project interchange (FCP7 XML, EDL, OTIO, .prproj).</p>
+  </description>
+  <launchable type="desktop-id">raccord.desktop</launchable>
+  <content_rating type="oars-1.1"/>
+</component>
