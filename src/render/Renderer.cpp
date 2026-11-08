@@ -372,6 +372,8 @@ SurfaceRef Renderer::clipSource(Ctx &c, const Clip &clip, Ticks t, double clipSc
         n.outH = std::max(1, int(nested->height * clipScale));
         n.renderScale = clipScale;
         n.opt.showCaptions = false;
+        // A multicam clip shows only its active angle.
+        n.soloTrack = nested->multicam ? multicamAngle(clip) : -1;
         return composite(n, clip.sourceAt(t));
     }
     case ClipSource::Adjustment:
@@ -573,7 +575,7 @@ SurfaceRef Renderer::composite(Ctx &c, Ticks t)
     m_gl->clear(0, 0, 0, 0);
     for (int ti = 0; ti < (int)seq.videoTracks.size(); ++ti) {
         const Track &track = seq.videoTracks[ti];
-        if (track.muted)
+        if (c.soloTrack >= 0 ? ti != c.soloTrack : track.muted)
             continue;
         // Transition active at t?
         const Transition *active = nullptr;
@@ -695,6 +697,7 @@ SurfaceRef Renderer::renderSequence(const Project &project, const Sequence &seq,
     c.outW = std::max(1, opt.width);
     c.outH = std::max(1, opt.height);
     c.renderScale = double(c.outW) / std::max(1, seq.width);
+    c.soloTrack = opt.soloVideoTrack;
     SurfaceRef acc = composite(c, t);
     if (!opt.keepAlpha) {
         // Composite over opaque black.
@@ -751,6 +754,19 @@ void Renderer::present(const SurfaceRef &s, int fbW, int fbH, QRectF vp, bool ch
     m_gl->set("uUvRect", float(0.5 - w / 2 + pan.x()), float(0.5 - w / 2 + pan.y()), w, w);
     m_gl->drawQuad();
     (void)fbW;
+}
+
+void Renderer::presentOverlay(const QImage &img, int fbW, int fbH)
+{
+    auto *f = m_gl->f;
+    m_overlayTex = m_gl->uploadImage(img, m_overlayTex);
+    f->glViewport(0, 0, fbW, fbH);
+    m_gl->use(m_gl->program("overlay", shaders::overlay));
+    m_gl->bindTexture("uTex", 0, m_overlayTex);
+    f->glEnable(GL_BLEND);
+    f->glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+    m_gl->drawQuad();
+    f->glDisable(GL_BLEND);
 }
 
 } // namespace rc

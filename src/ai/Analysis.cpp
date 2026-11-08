@@ -11,6 +11,7 @@
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <cmath>
+#include <complex>
 #include <numeric>
 
 namespace rc::ai {
@@ -130,6 +131,128 @@ std::vector<Ticks> detectScenes(const QString &path, Ticks in, Ticks out, double
 }
 
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Audio sync
+
+namespace {
+
+void fft(std::vector<std::complex<double>> &a, bool inverse)
+{
+    const size_t n = a.size();
+    for (size_t i = 1, j = 0; i < n; ++i) {
+        size_t bit = n >> 1;
+        for (; j & bit; bit >>= 1) j ^= bit;
+        j ^= bit;
+        if (i < j) std::swap(a[i], a[j]);
+    }
+    for (size_t len = 2; len <= n; len <<= 1) {
+        const double ang = 2 * M_PI / double(len) * (inverse ? 1 : -1);
+        const std::complex<double> wl(std::cos(ang), std::sin(ang));
+        for (size_t i = 0; i < n; i += len) {
+            std::complex<double> w(1);
+            for (size_t k = 0; k < len / 2; ++k) {
+                const auto u = a[i + k], v = a[i + k + len / 2] * w;
+                a[i + k] = u + v;
+                a[i + k + len / 2] = u - v;
+                w *= wl;
+            }
+        }
+    }
+    if (inverse)
+        for (auto &x : a) x /= double(n);
+}
+
+constexpr int kSyncRate = 8000;
+constexpr int kEnvRate = 200;   // envelope samples per second (5 ms)
+
+// Onset envelope: positive slope of log energy, zero mean / unit variance.
+std::vector<double> onsetEnvelope(const QString &path, double maxSeconds, QString *error)
+{
+    std::vector<double> env;
+    AudioReader r;
+    if (!r.open(path, 0, kSyncRate, error))
+        return env;
+    const int ch = std::max(1, r.channels());
+    const int win = kSyncRate / kEnvRate;
+    const int64_t total = std::min<int64_t>(r.lengthSamples() > 0 ? r.lengthSamples() : int64_t(maxSeconds * kSyncRate),
+                                            int64_t(maxSeconds * kSyncRate));
+    std::vector<float> buf(size_t(kSyncRate) * ch);
+    double prev = 0;
+    for (int64_t pos = 0; pos < total; pos += kSyncRate) {
+        const int n = int(std::min<int64_t>(kSyncRate, total - pos));
+        r.read(pos, n, buf.data());
+        for (int w0 = 0; w0 + win <= n; w0 += win) {
+            double sum = 0;
+            for (int i = 0; i < win; ++i)
+                for (int c = 0; c < ch; ++c) {
+                    const double v = buf[size_t(w0 + i) * ch + c];
+                    sum += v * v;
+                }
+            const double e = std::log10(1e-9 + sum / (win * ch));
+            env.push_back(std::max(0.0, e - prev));
+            prev = e;
+        }
+    }
+    if (env.empty())
+        return env;
+    const double mean = std::accumulate(env.begin(), env.end(), 0.0) / env.size();
+    double var = 0;
+    for (double &v : env) { v -= mean; var += v * v; }
+    const double sd = std::sqrt(var / env.size());
+    if (sd > 1e-12)
+        for (double &v : env) v /= sd;
+    return env;
+}
+
+} // namespace
+
+std::vector<Ticks> audioSyncOffsets(const QStringList &paths, double maxSeconds, const Progress &progress, QString *error)
+{
+    std::vector<Ticks> out(paths.size(), 0);
+    std::vector<std::vector<double>> envs;
+    for (int i = 0; i < paths.size(); ++i) {
+        QString err;
+        envs.push_back(onsetEnvelope(paths[i], maxSeconds, &err));
+        if (progress && !progress(0.8 * (i + 1) / paths.size()))
+            return out;
+    }
+    if (envs.empty() || envs[0].empty()) {
+        if (error) *error = QCoreApplication::translate("rc::ai", "The first clip has no usable audio.");
+        return out;
+    }
+    const auto &ref = envs[0];
+    for (int i = 1; i < (int)envs.size(); ++i) {
+        const auto &b = envs[i];
+        if (b.empty())
+            continue;
+        size_t n = 1;
+        while (n < ref.size() + b.size()) n <<= 1;
+        std::vector<std::complex<double>> A(n), B(n);
+        for (size_t k = 0; k < ref.size(); ++k) A[k] = ref[k];
+        for (size_t k = 0; k < b.size(); ++k) B[k] = b[k];
+        fft(A, false);
+        fft(B, false);
+        for (size_t k = 0; k < n; ++k) A[k] *= std::conj(B[k]);
+        fft(A, true);
+        // c[k] = sum ref[m] b[m-k]: b starts k envelope samples after ref.
+        // Normalise by the overlap so short overlaps at the edges do not win.
+        double best = -1e300;
+        long bestLag = 0;
+        const long na = long(ref.size()), nb = long(b.size());
+        for (long lag = -(nb - 1); lag <= na - 1; ++lag) {
+            const long overlap = std::min(na, lag + nb) - std::max(0L, lag);
+            if (overlap < std::min<long>(kEnvRate * 2, std::min(na, nb) / 2))
+                continue;
+            const double v = A[size_t(lag >= 0 ? lag : long(n) + lag)].real() / std::sqrt(double(overlap));
+            if (v > best) { best = v; bestLag = lag; }
+        }
+        out[i] = secondsToTicks(double(bestLag) / kEnvRate);
+        if (progress && !progress(0.8 + 0.2 * i / (envs.size() - 1)))
+            return out;
+    }
+    return out;
+}
 
 std::vector<TimeRange> detectSilence(const QString &path, int audioStream, Ticks in, Ticks out, double thresholdDb,
                                      Ticks minDuration, Ticks padding, const Progress &progress, QString *error)

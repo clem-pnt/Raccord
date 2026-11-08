@@ -156,6 +156,11 @@ struct Clip {
     static Clip fromJson(const QJsonObject &o);
 };
 
+// Multicam clip (nested multicam sequence): active angle = video track index of the source sequence.
+inline int multicamAngle(const Clip &c) { return c.gen.value("angle").toInt(0); }
+// Audio of a multicam clip follows the active angle (its audio track) instead of the source sequence mix.
+inline bool multicamAudioFollows(const Clip &c) { return c.gen.value("audioFollowsVideo").toBool(false); }
+
 struct Transition {
     enum Alignment { CenterAtCut, StartAtCut, EndAtCut };
     QString id;
@@ -260,6 +265,7 @@ struct Sequence {
     Ticks outPoint = kInvalidTicks;
     Ticks playhead = 0;
     QString colorSpace = "rec709";   // working space: rec709, rec2020pq, rec2020hlg
+    bool multicam = false;           // multi-camera source sequence: one angle per video track
 
     Ticks duration() const;
     Track *track(TrackType t, int index);

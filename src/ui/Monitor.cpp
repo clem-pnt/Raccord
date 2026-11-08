@@ -1,6 +1,7 @@
 #include <QOpenGLFunctions>
 #include <QOpenGLExtraFunctions>
 #include "Monitor.h"
+#include "core/Edit.h"
 #include "Session.h"
 #include "Icons.h"
 #include "render/Renderer.h"
@@ -66,15 +67,20 @@ QSize MonitorView::contentSize() const
     return {1920, 1080};
 }
 
-QRectF MonitorView::videoRect() const
+static QRectF fitIn(const QRectF &area, QSize c, double margin = 0.98)
 {
-    QSize c = contentSize();
     if (c.isEmpty())
         c = {16, 9};
-    const double W = width(), H = height();
-    double s = std::min(W / c.width(), H / c.height()) * 0.98;
-    double w = c.width() * s, h = c.height() * s;
-    return {(W - w) / 2, (H - h) / 2, w, h};
+    const double s = std::min(area.width() / c.width(), area.height() / c.height()) * margin;
+    const double w = c.width() * s, h = c.height() * s;
+    return {area.x() + (area.width() - w) / 2, area.y() + (area.height() - h) / 2, w, h};
+}
+
+QRectF MonitorView::videoRect() const
+{
+    if (!m_programRect.isEmpty())
+        return fitIn(m_programRect, contentSize());
+    return fitIn(QRectF(0, 0, width(), height()), contentSize());
 }
 
 QRectF MonitorView::clipBounds(const Clip &c) const
@@ -127,8 +133,38 @@ void MonitorView::paintGL()
         p.drawText(rect(), Qt::AlignCenter, tr("OpenGL 3.3 is not available on this system"));
         return;
     }
+    // Multicam: angles on the left half, program on the right.
+    const Clip *mcClip = nullptr;
+    const Sequence *mcSeq = nullptr;
+    m_angleCells.clear();
+    m_programRect = {};
+    if (m_multicam && m_mode == Playback::Mode::Program)
+        if (const Sequence *seq = s->sequence())
+            if ((mcClip = edit::multicamClipAt(s->project(), *seq, seq->playhead)))
+                mcSeq = s->project().sequence(mcClip->mediaId);
+    if (mcSeq && !mcSeq->videoTracks.empty()) {
+        const int n = (int)mcSeq->videoTracks.size();
+        const int cols = int(std::ceil(std::sqrt(double(n))));
+        const int rows = (n + cols - 1) / cols;
+        const QRectF grid(0, 0, width() / 2.0, height());
+        m_programRect = QRectF(width() / 2.0, 0, width() / 2.0, height());
+        const double cw = grid.width() / cols, ch = grid.height() / rows;
+        for (int k = 0; k < n; ++k) {
+            const QRectF cell(grid.x() + (k % cols) * cw, grid.y() + (k / cols) * ch, cw, ch);
+            const QRectF r = fitIn(cell, QSize(mcSeq->width, mcSeq->height), 0.96);
+            m_angleCells.push_back(r);
+            RenderOptions o;
+            o.width = std::max(16, std::min(mcSeq->width, int(r.width() * dpr / m_divider)));
+            o.height = std::max(9, int(int64_t(o.width) * mcSeq->height / std::max(1, mcSeq->width)));
+            o.soloVideoTrack = k;
+            o.showCaptions = false;
+            SurfaceRef a = m_renderer->renderSequence(s->project(), *mcSeq, mcClip->sourceAt(s->sequence()->playhead), o);
+            f->glBindFramebuffer(GL_FRAMEBUFFER, defaultFramebufferObject());
+            m_renderer->present(a, int(width() * dpr), int(height() * dpr), QRectF(r.x() * dpr, r.y() * dpr, r.width() * dpr, r.height() * dpr), false);
+        }
+    }
     QRectF vr = videoRect();
-    if (m_zoom > 1.01f)
+    if (m_zoom > 1.01f && m_programRect.isEmpty())
         vr = QRectF(0, 0, width(), height());
     const int outW = std::max(16, int(vr.width() * dpr * std::max(1.0f, m_zoom) / m_divider));
     const QSize cs = contentSize();
@@ -171,8 +207,14 @@ void MonitorView::paintGL()
     f->glBindTexture(GL_TEXTURE_2D, 0);
     f->glDisable(GL_BLEND);
     f->glDisable(GL_SCISSOR_TEST);
-    // Overlays.
-    QPainter p(this);
+    f->glViewport(0, 0, int(width() * dpr), int(height() * dpr));
+    // Overlays: drawn with QPainter into an image, then blended by the renderer
+    // (QPainter directly on this GL surface is unreliable after raw GL work).
+    QImage overlay(int(width() * dpr), int(height() * dpr), QImage::Format_RGBA8888_Premultiplied);
+    overlay.setDevicePixelRatio(dpr);
+    overlay.fill(Qt::transparent);
+    QPainter p(&overlay);
+    p.setFont(font());
     p.setRenderHint(QPainter::Antialiasing);
     if (m_mode == Playback::Mode::Source && s->sourceMedia().isEmpty()) {
         p.setPen(QColor(150, 150, 160));
@@ -191,7 +233,27 @@ void MonitorView::paintGL()
         p.drawLine(QPointF(vr.center().x() - 10, vr.center().y()), QPointF(vr.center().x() + 10, vr.center().y()));
         p.drawLine(QPointF(vr.center().x(), vr.center().y() - 10), QPointF(vr.center().x(), vr.center().y() + 10));
     }
-    if (m_mode == Playback::Mode::Program && s->selection().size() >= 1) {
+    if (mcClip && !m_angleCells.empty()) {
+        const int active = multicamAngle(*mcClip);
+        const bool playing = m_playing;
+        QFont fnt = font();
+        fnt.setPixelSize(11);
+        fnt.setBold(true);
+        p.setFont(fnt);
+        for (int k = 0; k < (int)m_angleCells.size(); ++k) {
+            const QRectF r = m_angleCells[k];
+            const bool on = k == active;
+            p.setBrush(Qt::NoBrush);
+            p.setPen(QPen(on ? (playing ? QColor(230, 50, 50) : QColor(255, 200, 0)) : QColor(70, 70, 80), on ? 3 : 1));
+            p.drawRect(r.adjusted(-1, -1, 1, 1));
+            const QString label = QString::number(k + 1) + "  " + mcSeq->videoTracks[k].name;
+            const QRectF lr(r.x() + 4, r.y() + 4, p.fontMetrics().horizontalAdvance(label) + 10, 18);
+            p.fillRect(lr, QColor(0, 0, 0, 150));
+            p.setPen(Qt::white);
+            p.drawText(lr, Qt::AlignCenter, label);
+        }
+    }
+    if (m_mode == Playback::Mode::Program && s->selection().size() >= 1 && m_angleCells.empty()) {
         if (Sequence *seq = s->sequence()) {
             const Clip *c = seq->clip(s->primaryClip());
             auto ref = seq->findClip(s->primaryClip());
@@ -213,6 +275,15 @@ void MonitorView::paintGL()
         p.setPen(QColor(255, 220, 0));
         p.drawLine(QPointF(vr.center().x(), vr.top()), QPointF(vr.center().x(), vr.bottom()));
     }
+    p.end();
+    f->glBindFramebuffer(GL_FRAMEBUFFER, defaultFramebufferObject());
+    m_renderer->gl().bindState();
+    m_renderer->presentOverlay(overlay, int(width() * dpr), int(height() * dpr));
+    f->glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    f->glPixelStorei(GL_PACK_ALIGNMENT, 4);
+    f->glUseProgram(0);
+    if (auto *ef = context()->extraFunctions()) ef->glBindVertexArray(0);
+    f->glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 QImage MonitorView::grabCurrent()
@@ -243,6 +314,13 @@ void MonitorView::mousePressEvent(QMouseEvent *e)
     Session *s = Session::instance();
     if (m_mode != Playback::Mode::Program || e->button() != Qt::LeftButton)
         return QOpenGLWidget::mousePressEvent(e);
+    for (int k = 0; k < (int)m_angleCells.size(); ++k)
+        if (m_angleCells[k].contains(e->position())) {
+            emit multicamAngleClicked(k);
+            return;
+        }
+    if (!m_angleCells.empty() && !m_programRect.contains(e->position()))
+        return;
     Sequence *seq = s->sequence();
     const Clip *c = seq ? seq->clip(s->primaryClip()) : nullptr;
     if (!c || !c->effect("motion"))
@@ -334,6 +412,7 @@ MonitorPanel::MonitorPanel(Playback::Mode mode, QWidget *parent) : QWidget(paren
     Session *s = Session::instance();
     m_playback = new Playback(mode, this);
     m_view = new MonitorView(mode, this);
+    connect(m_playback, &Playback::stateChanged, m_view, &MonitorView::setPlaying);
     auto *lay = new QVBoxLayout(this);
     lay->setContentsMargins(2, 2, 2, 2);
     lay->setSpacing(2);

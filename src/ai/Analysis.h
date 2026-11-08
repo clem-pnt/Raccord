@@ -24,6 +24,12 @@ std::vector<Ticks> detectScenes(const QString &path, Ticks in, Ticks out, double
 std::vector<TimeRange> detectSilence(const QString &path, int audioStream, Ticks in, Ticks out, double thresholdDb,
                                      Ticks minDuration, Ticks padding, const Progress &progress = {}, QString *error = nullptr);
 
+// Multicam synchronisation by audio: for each file, the time (ticks) at which
+// its start lands relative to the first file (may be negative). Uses the
+// first `maxSeconds` of each file. Files without audio get 0.
+std::vector<Ticks> audioSyncOffsets(const QStringList &paths, double maxSeconds = 600, const Progress &progress = {},
+                                    QString *error = nullptr);
+
 // Subject tracking for auto reframe: (source time, horizontal and vertical
 // centre in 0..1) samples, smoothed.
 struct ReframeSample { Ticks time; double x; double y; };

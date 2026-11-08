@@ -982,4 +982,175 @@ QString nest(Project &project, Sequence &seq, const std::vector<QString> &ids, c
     return nestedId;
 }
 
+// ---------------------------------------------------------------------------
+// Multicam
+
+QString createMulticamSequence(Project &project, const std::vector<MulticamAngle> &angles, const QString &name)
+{
+    std::vector<std::pair<const MediaItem *, Ticks>> items;
+    Ticks minOff = INT64_MAX;
+    for (const auto &a : angles)
+        if (const MediaItem *m = project.mediaItem(a.mediaId)) {
+            items.push_back({m, a.offset});
+            minOff = std::min(minOff, a.offset);
+        }
+    if (items.empty())
+        return {};
+    Sequence s;
+    s.id = newId();
+    s.name = name;
+    s.multicam = true;
+    const MediaItem *ref = nullptr;
+    for (const auto &it : items)
+        if (it.first->info.hasVideo) { ref = it.first; break; }
+    if (ref) {
+        const bool rot90 = ref->info.rotation == 90 || ref->info.rotation == 270;
+        s.width = std::max(16, rot90 ? ref->info.height : ref->info.width);
+        s.height = std::max(16, rot90 ? ref->info.width : ref->info.height);
+        if (ref->fps().num > 0) s.fps = ref->fps();
+        s.binId = ref->binId;
+    }
+    s.videoTracks.clear();
+    s.audioTracks.clear();
+    for (size_t i = 0; i < items.size(); ++i) {
+        const MediaItem &m = *items[i].first;
+        const Ticks start = items[i].second - minOff;
+        const Ticks dur = m.info.isStill ? 10 * kTicksPerSecond : m.info.duration;
+        const QString link = newId();
+        Track &vt = *s.addTrack(TrackType::Video);
+        s.addTrack(TrackType::Audio);
+        if (m.info.hasVideo) {
+            Clip c;
+            c.id = newId();
+            c.name = m.name;
+            c.mediaId = m.id;
+            c.start = start;
+            c.duration = dur;
+            c.linkId = m.info.hasAudio ? link : QString();
+            c.ensureIntrinsics(TrackType::Video);
+            vt.clips.push_back(c);
+        }
+        if (m.info.hasAudio) {
+            Clip c;
+            c.id = newId();
+            c.name = m.name;
+            c.mediaId = m.id;
+            c.start = start;
+            c.duration = dur;
+            c.linkId = m.info.hasVideo ? link : QString();
+            c.ensureIntrinsics(TrackType::Audio);
+            s.audioTracks.back().clips.push_back(c);
+        }
+        s.audioTracks.back().muted = i != 0;
+    }
+    s.renameTracks();
+    for (size_t i = 0; i < s.videoTracks.size(); ++i)
+        s.videoTracks[i].name = QStringLiteral("Camera %1").arg(i + 1);
+    const QString id = s.id;
+    project.sequences.push_back(std::move(s));
+    return id;
+}
+
+const Clip *multicamClipAt(const Project &project, const Sequence &seq, Ticks t)
+{
+    for (int ti = (int)seq.videoTracks.size() - 1; ti >= 0; --ti) {
+        const Track &track = seq.videoTracks[ti];
+        if (track.muted)
+            continue;
+        const int idx = track.clipIndexAt(t);
+        if (idx < 0)
+            continue;
+        const Clip &c = track.clips[idx];
+        if (c.source == ClipSource::Sequence && c.enabled)
+            if (const Sequence *n = project.sequence(c.mediaId); n && n->multicam)
+                return &c;
+    }
+    return nullptr;
+}
+
+bool setMulticamAngle(Sequence &seq, const QString &clipId, int angle)
+{
+    bool any = false;
+    for (const auto &id : seq.linkedClips(clipId))
+        if (Clip *c = seq.clip(id); c && c->source == ClipSource::Sequence) {
+            c->gen["angle"] = angle;
+            any = true;
+        }
+    return any;
+}
+
+bool cutMulticam(Sequence &seq, const std::set<QString> &multicamSeqs, Ticks t, int angle)
+{
+    for (int ti = (int)seq.videoTracks.size() - 1; ti >= 0; --ti) {
+        Track &track = seq.videoTracks[ti];
+        if (track.locked || track.muted)
+            continue;
+        const int idx = track.clipIndexAt(t);
+        if (idx < 0)
+            continue;
+        const Clip &c = track.clips[idx];
+        if (c.source != ClipSource::Sequence || !multicamSeqs.count(c.mediaId))
+            continue;
+        if (multicamAngle(c) == angle)
+            return false;
+        // Within half a frame of the cut: just switch the segment.
+        if (t - c.start <= seq.fps.frameTicks() / 2)
+            return setMulticamAngle(seq, c.id, angle);
+        razorClips(seq, {c.id}, t);
+        const int right = seq.videoTracks[ti].clipIndexAt(t);
+        if (right < 0)
+            return false;
+        return setMulticamAngle(seq, seq.videoTracks[ti].clips[right].id, angle);
+    }
+    return false;
+}
+
+int flattenMulticam(const Project &project, Sequence &seq, const std::vector<QString> &ids)
+{
+    int count = 0;
+    std::set<QString> done;
+    for (const auto &id : ids)
+        for (const auto &lid : seq.linkedClips(id)) {
+            if (done.count(lid))
+                continue;
+            done.insert(lid);
+            auto ref = seq.findClip(lid);
+            if (!ref)
+                continue;
+            Clip &c = seq.tracks(ref->type)[ref->track].clips[ref->index];
+            if (c.source != ClipSource::Sequence)
+                continue;
+            const Sequence *src = project.sequence(c.mediaId);
+            if (!src || !src->multicam)
+                continue;
+            const int angle = multicamAngle(c);
+            const Track *st = nullptr;
+            if (ref->type == TrackType::Video) {
+                if (angle < (int)src->videoTracks.size()) st = &src->videoTracks[angle];
+            } else if (multicamAudioFollows(c) && angle < (int)src->audioTracks.size()) {
+                st = &src->audioTracks[angle];
+            } else {
+                for (const auto &t : src->audioTracks)
+                    if (!t.muted) { st = &t; break; }
+            }
+            if (!st)
+                continue;
+            const Ticks nestedIn = c.reverse ? c.sourceOut() : c.in;
+            const int mi = st->clipIndexAt(nestedIn);
+            if (mi < 0)
+                continue;
+            const Clip &mc = st->clips[mi];
+            if (c.sourceOut() > mc.end() + seq.fps.frameTicks())
+                continue;   // the angle changes clips inside this segment: keep it nested
+            c.source = mc.source;
+            c.mediaId = mc.mediaId;
+            c.in = mc.sourceAt(c.in);
+            c.speed *= mc.speed;
+            c.audioStream = mc.audioStream;
+            c.gen = mc.gen;
+            ++count;
+        }
+    return count;
+}
+
 } // namespace rc::edit

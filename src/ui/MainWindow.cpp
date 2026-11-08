@@ -10,6 +10,7 @@
 #include "Scopes.h"
 #include "Timeline.h"
 #include "ai/Analysis.h"
+#include "core/Edit.h"
 #include "Version.h"
 #include "export/Exporter.h"
 #include "export/Proxy.h"
@@ -43,6 +44,7 @@
 #include <QPlainTextEdit>
 #include <QProgressBar>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QSettings>
 #include <QStatusBar>
 #include <QTimer>
@@ -141,6 +143,7 @@ void MainWindow::buildPanels()
     connect(m_source, &MonitorPanel::insertRequested, this, [this] { sourceEdit(true); });
     connect(m_source, &MonitorPanel::overwriteRequested, this, [this] { sourceEdit(false); });
     connect(m_program, &MonitorPanel::exportFrameRequested, this, &MainWindow::exportFrame);
+    connect(m_program->view(), &MonitorView::multicamAngleClicked, this, &MainWindow::multicamCut);
     connect(m_program->view(), &MonitorView::droppedFiles, this, [this](const QStringList &paths) {
         m_project->importFiles(paths, {}, [](const QStringList &ids) {
             S()->doc().editSequence(tr("Overwrite"), [&](Sequence &seq) {
@@ -466,6 +469,19 @@ void MainWindow::buildMenus()
     action(clip, tr("Set to Frame Size"), {}, [this] { clipMenuAction("fit"); });
     action(clip, tr("Scale to Frame Size (Fill)"), {}, [this] { clipMenuAction("fill"); });
     action(clip, tr("Make Subclip"), K("Ctrl+U"), [this] { clipMenuAction("subclip"); });
+    clip->addSeparator();
+    QMenu *mc = clip->addMenu(tr("Multi-Camera"));
+    action(mc, tr("Create Multi-Camera Source Sequence..."), {}, [this] { createMulticam(); });
+    QAction *mcView = action(mc, tr("Multi-Camera View"), K("Shift+0"), [this] {
+        m_program->view()->setMulticamView(!m_program->view()->multicamView());
+    });
+    mcView->setCheckable(true);
+    connect(mc, &QMenu::aboutToShow, mcView, [this, mcView] { mcView->setChecked(m_program->view()->multicamView()); });
+    action(mc, tr("Audio Follows Video"), {}, [this] { multicamClipAction("audioFollows"); });
+    action(mc, tr("Flatten"), {}, [this] { multicamClipAction("flatten"); });
+    mc->addSeparator();
+    for (int k = 0; k < 9; ++k)
+        action(mc, tr("Cut to Camera %1").arg(k + 1), K(QString::number(k + 1)), [this, k] { multicamCut(k); });
 
     // ---------------- Sequence
     QMenu *seqm = menuBar()->addMenu(tr("&Sequence"));
@@ -1925,6 +1941,156 @@ void MainWindow::createProxies()
         if (!err.isEmpty()) QMessageBox::warning(this, tr("Proxies"), err);
         else statusBar()->showMessage(tr("%n proxy file(s) ready", "", int(done->size())), 4000);
     });
+}
+
+void MainWindow::createMulticam()
+{
+    Session *s = S();
+    QStringList ids;
+    m_project->selectedMediaIds(ids);
+    std::vector<MediaItem> items;
+    for (const auto &id : ids)
+        if (const MediaItem *m = s->project().mediaItem(id); m && (m->info.hasVideo || m->info.hasAudio)) items.push_back(*m);
+    if (items.size() < 2) {
+        QMessageBox::information(this, tr("Multi-Camera"), tr("Select at least two clips in the Project panel (one per camera)."));
+        return;
+    }
+    QDialog dlg(this);
+    dlg.setWindowTitle(tr("Create Multi-Camera Source Sequence"));
+    auto *form = new QFormLayout(&dlg);
+    auto *name = new QLineEdit(QFileInfo(items[0].name).completeBaseName() + tr(" Multicam"), &dlg);
+    auto *sync = new QComboBox(&dlg);
+    sync->addItem(tr("Audio"), "audio");
+    sync->addItem(tr("In Points"), "in");
+    sync->addItem(tr("Timecode"), "tc");
+    sync->addItem(tr("Clip Start"), "start");
+    auto *makeEdit = new QCheckBox(tr("Create an editing sequence and show the multi-camera view"), &dlg);
+    makeEdit->setChecked(true);
+    form->addRow(tr("Name:"), name);
+    form->addRow(tr("Synchronize by:"), sync);
+    form->addRow(makeEdit);
+    auto *bb = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+    form->addRow(bb);
+    connect(bb, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    connect(bb, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+    if (dlg.exec() != QDialog::Accepted)
+        return;
+    const QString mode = sync->currentData().toString();
+    const QString seqName = name->text().trimmed().isEmpty() ? tr("Multicam") : name->text().trimmed();
+    const bool edit = makeEdit->isChecked();
+    auto offsets = std::make_shared<std::vector<Ticks>>(items.size(), 0);
+    auto finish = [this, items, offsets, seqName, edit](const QString &err) {
+        if (!err.isEmpty()) {
+            QMessageBox::warning(this, tr("Multi-Camera"), err);
+            return;
+        }
+        std::vector<edit::MulticamAngle> angles;
+        for (size_t i = 0; i < items.size(); ++i) angles.push_back({items[i].id, (*offsets)[i]});
+        QString mcId, editId;
+        S()->doc().edit(tr("Create Multi-Camera Source Sequence"), [&](Project &p) {
+            mcId = edit::createMulticamSequence(p, angles, seqName);
+            const Sequence *mcs = p.sequence(mcId);
+            if (!mcs) return false;
+            if (edit) {
+                Sequence e;
+                e.id = newId();
+                e.name = seqName + tr(" - Edit");
+                e.width = mcs->width;
+                e.height = mcs->height;
+                e.fps = mcs->fps;
+                e.binId = mcs->binId;
+                e.ensureDefaultTracks();
+                const QString link = newId();
+                for (TrackType t : {TrackType::Video, TrackType::Audio}) {
+                    Clip c;
+                    c.id = newId();
+                    c.name = seqName;
+                    c.source = ClipSource::Sequence;
+                    c.mediaId = mcId;
+                    c.duration = mcs->duration();
+                    c.linkId = link;
+                    c.ensureIntrinsics(t);
+                    e.tracks(t)[0].clips.push_back(c);
+                }
+                editId = e.id;
+                p.sequences.push_back(std::move(e));
+            }
+            return true;
+        });
+        if (!editId.isEmpty()) {
+            S()->setActiveSequence(editId);
+            m_program->view()->setMulticamView(true);
+        }
+        statusBar()->showMessage(tr("Multi-camera sequence created"), 4000);
+    };
+    if (mode == "audio") {
+        QStringList paths;
+        for (const auto &m : items) paths << m.path;
+        runTask(tr("Synchronizing cameras by audio"), [paths, offsets](std::function<bool(double)> pr) {
+            QString err;
+            *offsets = ai::audioSyncOffsets(paths, 600, pr, &err);
+            return err;
+        }, finish);
+        return;
+    }
+    for (size_t i = 0; i < items.size(); ++i) {
+        const MediaItem &m = items[i];
+        if (mode == "in") {
+            (*offsets)[i] = m.inPoint == kInvalidTicks ? 0 : -m.inPoint;
+        } else if (mode == "tc") {
+            const QStringList f = m.info.timecode.split(QRegularExpression("[:;.]"));
+            if (f.size() == 4) {
+                const FrameRate r = m.fps().num > 0 ? m.fps() : FrameRate{25, 1};
+                const double fpsv = double(r.num) / std::max(1, r.den);
+                const double sec = f[0].toInt() * 3600.0 + f[1].toInt() * 60.0 + f[2].toInt() + f[3].toInt() / std::max(1.0, std::round(fpsv));
+                (*offsets)[i] = secondsToTicks(sec);
+            }
+        }
+    }
+    finish({});
+}
+
+void MainWindow::multicamCut(int angle)
+{
+    Session *s = S();
+    const Sequence *seq = s->sequence();
+    if (!seq) return;
+    std::set<QString> mcs;
+    for (const auto &q : s->project().sequences) if (q.multicam) mcs.insert(q.id);
+    if (mcs.empty()) return;
+    const Ticks t = seq->playhead;
+    s->doc().editSequence(tr("Switch Camera"), [&](Sequence &q) { return edit::cutMulticam(q, mcs, t, angle); });
+}
+
+void MainWindow::multicamClipAction(const QString &what)
+{
+    Session *s = S();
+    std::vector<QString> ids(s->selection().begin(), s->selection().end());
+    if (ids.empty())
+        if (const Sequence *seq = s->sequence())
+            if (const Clip *c = edit::multicamClipAt(s->project(), *seq, seq->playhead)) ids.push_back(c->id);
+    if (ids.empty()) return;
+    if (what == "flatten") {
+        int n = 0;
+        s->doc().edit(tr("Flatten Multi-Camera"), [&](Project &p) {
+            Sequence *q = p.activeSequence();
+            if (!q) return false;
+            n = edit::flattenMulticam(p, *q, ids);
+            return n > 0;
+        });
+        statusBar()->showMessage(tr("%n clip(s) flattened", "", n), 4000);
+    } else if (what == "audioFollows") {
+        s->doc().editSequence(tr("Audio Follows Video"), [&](Sequence &q) {
+            bool any = false;
+            for (const auto &id : ids)
+                for (const auto &lid : q.linkedClips(id))
+                    if (Clip *c = q.clip(lid); c && c->source == ClipSource::Sequence) {
+                        c->gen["audioFollowsVideo"] = !multicamAudioFollows(*c);
+                        any = true;
+                    }
+            return any;
+        });
+    }
 }
 
 void MainWindow::normalizeLoudness()

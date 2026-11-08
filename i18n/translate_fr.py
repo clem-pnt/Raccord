@@ -11,6 +11,29 @@ import sys
 import xml.etree.ElementTree as ET
 
 UI = {
+    # Multicam
+    "Multi-Camera": "Multicaméra",
+    "Create Multi-Camera Source Sequence...": "Créer une séquence source multicaméra...",
+    "Create Multi-Camera Source Sequence": "Créer une séquence source multicaméra",
+    "Multi-Camera View": "Vue multicaméra",
+    "Audio Follows Video": "L'audio suit la vidéo",
+    "Flatten": "Aplatir",
+    "Cut to Camera %1": "Couper vers la caméra %1",
+    "Select at least two clips in the Project panel (one per camera).": "Sélectionnez au moins deux éléments dans le panneau Projet (un par caméra).",
+    " Multicam": " Multicam",
+    "In Points": "Points d'entrée",
+    "Timecode": "Timecode",
+    "Clip Start": "Début des éléments",
+    "Create an editing sequence and show the multi-camera view": "Créer une séquence de montage et afficher la vue multicaméra",
+    "Synchronize by:": "Synchroniser par :",
+    "Multicam": "Multicam",
+    " - Edit": " - Montage",
+    "Multi-camera sequence created": "Séquence multicaméra créée",
+    "Synchronizing cameras by audio": "Synchronisation des caméras par l'audio",
+    "Switch Camera": "Changer de caméra",
+    "Flatten Multi-Camera": "Aplatir le multicaméra",
+    "%n clip(s) flattened": ("%n élément aplati", "%n éléments aplatis"),
+    "The first clip has no usable audio.": "Le premier élément n'a pas d'audio exploitable.",
  "No video stream": "Aucun flux vidéo",
  "Cannot open decoder": "Impossible d'ouvrir le décodeur",
  "Transcription engine not installed": "Moteur de transcription non installé",
@@ -669,6 +692,8 @@ def main():
     root.set("language", "fr_FR")
     missing = []
     for ctx in root.iter("context"):
+        if ctx.find("name").text == "Effects":
+            continue   # filled from FX below
         for m in ctx.iter("message"):
             src = m.find("source").text or ""
             tr = m.find("translation")

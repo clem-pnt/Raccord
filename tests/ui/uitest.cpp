@@ -6,6 +6,10 @@
 #include "ui/Session.h"
 #include "ui/Timeline.h"
 #include "media/FFmpeg.h"
+#include "media/MediaProbe.h"
+#include "ai/Analysis.h"
+#include "core/Edit.h"
+#include <QFileInfo>
 #include <QAction>
 #include <QApplication>
 #include <QDir>
@@ -182,6 +186,65 @@ int main(int argc, char **argv)
         CHECK(session.playhead() > secondsToTicks(0.8));
     }
     shot("07-final");
+
+    // 9. Multicam: build a source sequence from two cameras, cut with the number keys.
+    {
+        const QString dir = QStringLiteral(RACCORD_SOURCE_DIR "/test-media/");
+        QStringList cams = {dir + "f_cam1.mp4", dir + "f_cam2.mp4"};
+        if (QFileInfo::exists(cams[0]) && QFileInfo::exists(cams[1])) {
+            const auto offs = ai::audioSyncOffsets(cams);
+            CHECK(offs.size() == 2 && std::abs(ticksToSeconds(offs[1]) - 3.4) < 0.05);
+            QString editId;
+            session.doc().edit("multicam", [&](Project &p) {
+                std::vector<edit::MulticamAngle> angles;
+                for (int i = 0; i < 2; ++i) {
+                    MediaItem m;
+                    m.id = newId();
+                    m.name = QFileInfo(cams[i]).fileName();
+                    m.path = cams[i];
+                    m.info = probeMedia(cams[i]);
+                    p.media.push_back(m);
+                    angles.push_back({m.id, offs[i]});
+                }
+                const QString mc = edit::createMulticamSequence(p, angles, "MC");
+                Sequence e;
+                e.id = editId = newId();
+                e.name = "MC Edit";
+                e.ensureDefaultTracks();
+                const QString link = newId();
+                for (TrackType t : {TrackType::Video, TrackType::Audio}) {
+                    Clip c;
+                    c.id = newId();
+                    c.name = "MC";
+                    c.source = ClipSource::Sequence;
+                    c.mediaId = mc;
+                    c.duration = p.sequence(mc)->duration();
+                    c.linkId = link;
+                    c.ensureIntrinsics(t);
+                    e.tracks(t)[0].clips.push_back(c);
+                }
+                p.sequences.push_back(e);
+                return true;
+            });
+            session.setActiveSequence(editId);
+            for (MonitorView *mv : w.findChildren<MonitorView *>()) mv->setMulticamView(true);
+            session.setPlayhead(secondsToTicks(5.0));
+            QTest::qWait(300);
+            QApplication::setActiveWindow(&w);
+            tl->setFocus();
+            QTest::keyClick(tl, Qt::Key_2);
+            QTest::qWait(100);
+            const Sequence *es = session.sequence();
+            std::fprintf(stderr, "     multicam clips after key 2: %d\n", es ? int(es->videoTracks[0].clips.size()) : -1);
+            CHECK(es && es->videoTracks[0].clips.size() == 2);
+            if (es && es->videoTracks[0].clips.size() == 2) {
+                CHECK(multicamAngle(es->videoTracks[0].clips[1]) == 1);
+                CHECK(multicamAngle(es->audioTracks[0].clips[1]) == 1);
+            }
+            session.setPlayhead(secondsToTicks(6.0));
+            shot("08-multicam");
+        }
+    }
     std::fprintf(stderr, "%d failure(s)\n", failures);
     session.doc().touch(false);
     QTimer::singleShot(0, &app, &QApplication::quit);

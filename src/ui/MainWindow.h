@@ -90,6 +90,10 @@ private:
     void stabilize();
     void createProxies();
     void normalizeLoudness();
+    // Multicam
+    void createMulticam();
+    void multicamCut(int angle);
+    void multicamClipAction(const QString &what);
 
     bool sourceFocused() const;
     MonitorPanel *activeMonitor() const;

@@ -10,6 +10,7 @@ extern const char *solid;
 extern const char *bars;
 extern const char *checker;
 extern const char *present;
+extern const char *overlay;      // premultiplied image over the framebuffer
 extern const char *blur1d;
 extern const char *mask;
 extern const char *lumetri;

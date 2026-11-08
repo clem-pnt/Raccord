@@ -28,11 +28,16 @@ public:
     void setScopesWanted(bool on) { m_scopes = on; }
     void setCompareFrame(const QImage &img) { m_compare = img; update(); }
     QImage grabCurrent();
+    // Program monitor: angle grid of the multicam clip under the playhead next to the program.
+    void setMulticamView(bool on) { m_multicam = on; update(); }
+    bool multicamView() const { return m_multicam; }
+    void setPlaying(bool on) { m_playing = on; update(); }
     QSize contentSize() const;
 
 signals:
     void frameForScopes(const QImage &img);
     void droppedFiles(const QStringList &paths);
+    void multicamAngleClicked(int angle);
 
 protected:
     void initializeGL() override;
@@ -56,6 +61,10 @@ private:
     bool m_scopes = false;
     qint64 m_lastScope = 0;
     QImage m_compare;
+    bool m_multicam = false;
+    bool m_playing = false;
+    std::vector<QRectF> m_angleCells;   // widget coords, filled while painting the grid
+    QRectF m_programRect;               // program area when the grid is shown
     // Direct manipulation of Motion
     bool m_dragging = false;
     int m_dragHandle = -1;   // -1 move, 0..3 corners (scale)

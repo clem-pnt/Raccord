@@ -335,6 +335,9 @@ void TimelineView::paintClip(QPainter &p, const Row &row, const Track &track, co
     f.setPixelSize(11);
     p.setFont(f);
     QString name = c.name.isEmpty() ? clipSourceName(c.source) : c.name;
+    if (c.source == ClipSource::Sequence)
+        if (const Sequence *n = Session::instance()->project().sequence(c.mediaId); n && n->multicam)
+            name = QString("[MC%1] ").arg(multicamAngle(c) + 1) + name;
     if (c.speed != 1.0 || c.reverse)
         name += QString(" [%1%2%]").arg(c.reverse ? "-" : "").arg(c.speed * 100, 0, 'f', 0);
     bool hasFx = false;

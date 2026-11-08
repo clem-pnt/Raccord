@@ -251,6 +251,11 @@ void main() {
 }
 )";
 
+const char *overlay = HEAD R"(
+uniform sampler2D uTex;
+void main() { o = texture(uTex, vec2(vUv.x, 1.0 - vUv.y)); }
+)";
+
 const char *blur1d = HEAD R"(
 uniform sampler2D uTex;
 uniform vec2 uStep;

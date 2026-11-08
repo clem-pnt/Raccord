@@ -19,6 +19,7 @@ struct RenderOptions {
     bool showHslMask = true;       // honour "show mask" toggles (disabled when exporting)
     QString hideTrackMatteSources; // reserved
     int maxNesting = 8;
+    int soloVideoTrack = -1;       // render only this video track of the top sequence (multicam angle preview)
 };
 
 class TitleRenderer;
@@ -39,6 +40,8 @@ public:
     SurfaceRef convertFrame(const VideoFramePtr &frame, double scale = 1.0, int alphaMode = 0);
     // Draws a surface into the currently bound framebuffer (screen) letterboxed in `vp` (pixels, GL origin bottom-left).
     void present(const SurfaceRef &s, int fbW, int fbH, QRectF vp, bool checkerboard, float zoom = 1.0f, QPointF pan = {});
+    // Blends a premultiplied overlay image (UI drawn with QPainter) over the whole bound framebuffer.
+    void presentOverlay(const QImage &img, int fbW, int fbH);
     // Downscaled copy for scopes.
     SurfaceRef downscale(const SurfaceRef &s, int maxW);
 
@@ -54,6 +57,7 @@ private:
         int outW = 0, outH = 0;
         double renderScale = 1.0;   // output px per sequence px
         int depth = 0;
+        int soloTrack = -1;
     };
     SurfaceRef composite(Ctx &c, Ticks t);
     // Renders one clip at sequence time t into a full output-size layer (after effects + motion). opacity applied.
@@ -79,6 +83,7 @@ private:
     bool m_ok = false;
     QString m_error;
     int m_misses = 0;
+    GLuint m_overlayTex = 0;
 
     // Plane textures used to upload frames.
     GLuint m_planes[4] = {0, 0, 0, 0};

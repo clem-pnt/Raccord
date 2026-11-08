@@ -197,3 +197,76 @@ TEST_CASE("proxy generation")
     CHECK(pi.width == 202);
     CHECK(std::abs(ticksToSeconds(pi.duration) - ticksToSeconds(m.info.duration)) < 0.1);
 }
+
+TEST_CASE("multicam: audio sync, live switching and flatten")
+{
+    const QString a = testMedia("f_cam1.mp4"), b = testMedia("f_cam2.mp4");
+    if (a.isEmpty() || b.isEmpty()) return;
+    // f_cam2's audio is f_cam1's from 3.4 s on, plus noise.
+    QString err;
+    auto offs = ai::audioSyncOffsets({a, b}, 600, {}, &err);
+    INFO(err.toStdString());
+    REQUIRE(offs.size() == 2);
+    CHECK(offs[0] == 0);
+    CHECK(std::abs(ticksToSeconds(offs[1]) - 3.4) < 0.02);
+
+    Project p;
+    for (const QString &f : {a, b}) {
+        MediaItem m;
+        m.id = newId();
+        m.name = QFileInfo(f).fileName();
+        m.path = f;
+        m.info = probeMedia(f);
+        p.media.push_back(m);
+    }
+    const QString mcId = edit::createMulticamSequence(p, {{p.media[0].id, offs[0]}, {p.media[1].id, offs[1]}}, "MC");
+    const Sequence *mc = p.sequence(mcId);
+    REQUIRE(mc);
+    CHECK(mc->multicam);
+    REQUIRE(mc->videoTracks.size() == 2);
+    CHECK(mc->videoTracks[1].clips[0].start == offs[1]);
+    CHECK(!mc->audioTracks[0].muted);
+    CHECK(mc->audioTracks[1].muted);
+
+    // Edit sequence with the multicam clip (V1 + A1, linked).
+    Sequence s;
+    s.id = newId();
+    s.fps = {25, 1};
+    s.ensureDefaultTracks();
+    const QString link = newId();
+    for (TrackType t : {TrackType::Video, TrackType::Audio}) {
+        Clip c;
+        c.id = newId();
+        c.source = ClipSource::Sequence;
+        c.mediaId = mcId;
+        c.start = 0;
+        c.duration = 10 * kTicksPerSecond;
+        c.in = 4 * kTicksPerSecond;
+        c.linkId = link;
+        c.ensureIntrinsics(t);
+        s.tracks(t)[0].clips.push_back(c);
+    }
+    const std::set<QString> mcs{mcId};
+    // Switch to camera 2 at 3 s, back to camera 1 at 6 s.
+    REQUIRE(edit::cutMulticam(s, mcs, 3 * kTicksPerSecond, 1));
+    REQUIRE(edit::cutMulticam(s, mcs, 6 * kTicksPerSecond, 0));
+    REQUIRE(s.videoTracks[0].clips.size() == 3);
+    CHECK(multicamAngle(s.videoTracks[0].clips[0]) == 0);
+    CHECK(multicamAngle(s.videoTracks[0].clips[1]) == 1);
+    CHECK(multicamAngle(s.videoTracks[0].clips[2]) == 0);
+    CHECK(multicamAngle(s.audioTracks[0].clips[1]) == 1);   // linked audio follows the switch
+    // Same angle again: nothing to do.
+    CHECK(!edit::cutMulticam(s, mcs, 7 * kTicksPerSecond, 0));
+
+    // Flatten: segment 2 shows f_cam2 from nested time 7 s, i.e. its own 3.6 s.
+    std::vector<QString> ids;
+    for (const auto &c : s.videoTracks[0].clips) ids.push_back(c.id);
+    CHECK(edit::flattenMulticam(p, s, ids) == 6);
+    const Clip &seg2 = s.videoTracks[0].clips[1];
+    CHECK(seg2.source == ClipSource::Media);
+    CHECK(seg2.mediaId == p.media[1].id);
+    CHECK(std::abs(ticksToSeconds(seg2.in) - (7.0 - ticksToSeconds(offs[1]))) < 0.001);
+    // Audio stays on camera 1 (the audible track of the source sequence).
+    CHECK(s.audioTracks[0].clips[1].mediaId == p.media[0].id);
+    CHECK(std::abs(ticksToSeconds(s.audioTracks[0].clips[1].in) - 7.0) < 0.001);
+}

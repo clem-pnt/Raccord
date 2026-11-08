@@ -697,6 +697,7 @@ QJsonObject Sequence::toJson() const
     if (outPoint != kInvalidTicks) o["out"] = T(outPoint);
     o["playhead"] = T(playhead);
     o["colorSpace"] = colorSpace;
+    if (multicam) o["multicam"] = true;
     return o;
 }
 
@@ -726,6 +727,7 @@ Sequence Sequence::fromJson(const QJsonObject &o)
     s.outPoint = o.contains("out") ? T(o["out"]) : kInvalidTicks;
     s.playhead = T(o["playhead"]);
     s.colorSpace = o["colorSpace"].toString("rec709");
+    s.multicam = o["multicam"].toBool();
     return s;
 }
 

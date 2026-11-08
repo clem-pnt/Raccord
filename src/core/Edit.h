@@ -89,4 +89,19 @@ std::vector<Ticks> snapPoints(const Sequence &seq, const std::set<QString> &excl
 // Replaces clips by a single nested sequence clip. Returns the new sequence id.
 QString nest(Project &project, Sequence &seq, const std::vector<QString> &ids, const QString &name);
 
+// Multicam ------------------------------------------------------------------
+struct MulticamAngle { QString mediaId; Ticks offset = 0; };   // offset: media start in the source sequence
+// Builds a multicam source sequence (one video track and one audio track per
+// angle, audio of angle 1 audible) and adds it to the project. Returns its id.
+QString createMulticamSequence(Project &project, const std::vector<MulticamAngle> &angles, const QString &name);
+// Topmost enabled multicam clip on a visible video track at t (nullptr if none).
+const Clip *multicamClipAt(const Project &project, const Sequence &seq, Ticks t);
+// Sets the active angle of a multicam clip and of its linked clips.
+bool setMulticamAngle(Sequence &seq, const QString &clipId, int angle);
+// Live switching: cuts the topmost multicam clip under t (ids of multicam
+// source sequences in `multicamSeqs`) and gives the new segment `angle`.
+bool cutMulticam(Sequence &seq, const std::set<QString> &multicamSeqs, Ticks t, int angle);
+// Replaces multicam clips by the media clip of their active angle. Returns the number flattened.
+int flattenMulticam(const Project &project, Sequence &seq, const std::vector<QString> &ids);
+
 } // namespace rc::edit

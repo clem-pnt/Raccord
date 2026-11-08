@@ -134,6 +134,8 @@ void AudioMixer::renderClip(const Project &project, const Sequence &seq, const T
             m_nested = std::make_unique<AudioMixer>();
         int64_t srcPos = ticksToSamples(clip.sourceAt(tStart), rate);
         std::vector<float> tmp(size_t(n) * nested->audioChannels);
+        m_nested->setSoloTrack(nested->multicam && multicamAudioFollows(clip) && multicamAngle(clip) < (int)nested->audioTracks.size()
+                                   ? multicamAngle(clip) : -1);
         m_nested->mix(project, *nested, srcPos, n, tmp.data());
         for (int i = 0; i < n; ++i)
             for (int c = 0; c < outCh; ++c)

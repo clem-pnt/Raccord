@@ -9,5 +9,6 @@ target_compile_definitions(raccord-tests PRIVATE RACCORD_SOURCE_DIR="${CMAKE_SOU
 find_package(Qt6 COMPONENTS Test)
 if(Qt6Test_FOUND)
   add_executable(raccord-uitest ui/uitest.cpp)
+  target_compile_definitions(raccord-uitest PRIVATE RACCORD_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
   target_link_libraries(raccord-uitest PRIVATE raccord_ui Qt6::Test)
 endif()
