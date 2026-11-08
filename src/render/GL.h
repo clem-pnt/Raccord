@@ -67,6 +67,8 @@ public:
     // Reads RGBA16 (16 bit unsigned) pixels into `out` (w*h*4 uint16), rows top-first.
     void readback16(const SurfaceRef &s, std::vector<uint16_t> &out);
     void readbackFloat(const SurfaceRef &s, std::vector<float> &out);
+    // Replaces the content of a surface with w*h RGBA floats (same row order as readbackFloat).
+    void uploadFloat(const SurfaceRef &s, const float *data);
 
     QString lastError() const { return m_error; }
     GLuint vao() const { return m_vao; }

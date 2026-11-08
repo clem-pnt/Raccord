@@ -16,6 +16,7 @@
 #include "export/Proxy.h"
 #include "interop/Interchange.h"
 #include "interop/Subtitles.h"
+#include "ofx/OfxHost.h"
 #include "media/MediaPool.h"
 #include "playback/Playback.h"
 #include <QApplication>
@@ -718,6 +719,18 @@ void MainWindow::buildMenus()
 
     // ---------------- Help
     QMenu *help = menuBar()->addMenu(tr("&Help"));
+    action(help, tr("OpenFX Plugins..."), {}, [this] {
+        auto &h = ofx::Host::instance();
+        QString text = tr("<b>Loaded plugins</b>: %1<br>").arg(h.loadedPlugins().size());
+        for (const auto &p : h.loadedPlugins()) text += p.toHtmlEscaped() + "<br>";
+        text += tr("<br><b>Search folders</b> (put .ofx.bundle folders here, then restart):<br>");
+        for (const auto &d : h.searchPaths()) text += d.toHtmlEscaped() + "<br>";
+        if (!h.errors().isEmpty()) {
+            text += tr("<br><b>Problems</b>:<br>");
+            for (const auto &e : h.errors()) text += e.toHtmlEscaped() + "<br>";
+        }
+        QMessageBox::information(this, tr("OpenFX Plugins"), text);
+    });
     action(help, tr("About Raccord"), {}, [this] {
         QMessageBox::about(this, tr("About Raccord"),
                            tr("<h2>Raccord %1</h2><p>Professional video editing for Linux.</p>"

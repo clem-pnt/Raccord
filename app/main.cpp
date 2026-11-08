@@ -2,6 +2,7 @@
 #include "media/FFmpeg.h"
 #include "ui/Icons.h"
 #include "ui/MainWindow.h"
+#include "ofx/OfxHost.h"
 #include "ui/Session.h"
 #include <QApplication>
 #include <QCommandLineParser>
@@ -45,6 +46,7 @@ int main(int argc, char **argv)
     parser.process(app);
 
     rc::ff::initLogging();
+    rc::ofx::Host::instance().loadPlugins();
     rc::applyTheme(app);
     rc::Session session;
     rc::MainWindow w;

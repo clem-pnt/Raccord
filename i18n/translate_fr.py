@@ -11,6 +11,12 @@ import sys
 import xml.etree.ElementTree as ET
 
 UI = {
+    # OpenFX
+    "OpenFX Plugins...": "Plugins OpenFX...",
+    "OpenFX Plugins": "Plugins OpenFX",
+    "<b>Loaded plugins</b>: %1<br>": "<b>Plugins chargés</b> : %1<br>",
+    "<br><b>Search folders</b> (put .ofx.bundle folders here, then restart):<br>": "<br><b>Dossiers de recherche</b> (placez-y les dossiers .ofx.bundle, puis relancez) :<br>",
+    "<br><b>Problems</b>:<br>": "<br><b>Problèmes</b> :<br>",
     # Multicam
     "Multi-Camera": "Multicaméra",
     "Create Multi-Camera Source Sequence...": "Créer une séquence source multicaméra...",

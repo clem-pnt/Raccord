@@ -10,6 +10,10 @@ Interface, raccourcis et échanges de projets pensés pour les monteurs qui vien
   suppression avec raccord, magnétisme, liaison A/V, imbrication, marqueurs, points d'entrée/sortie, J/K/L.
 - **Formats** : tout ce que lit FFmpeg (H.264, HEVC 10 bits, ProRes, DNxHR, VP9, AV1, images, séquences), toutes
   résolutions et cadences, rotation des smartphones, alpha. Temps interne exact en ticks (unité Premiere).
+- **Multicaméra** : séquence source synchronisée par l'audio, les points d'entrée ou le timecode, vue des angles
+  dans le moniteur programme, coupe en direct avec les touches 1 à 9 ou un clic, l'audio peut suivre l'angle, aplatissement.
+- **Plugins OpenFX** : hôte OFX 1.4 (contextes filtre et général, images float, paramètres numériques, couleur,
+  choix, position, texte). Plugins cherchés dans `$OFX_PLUGIN_PATH`, `/usr/OFX/Plugins` et `~/.local/share/raccord/ofx`.
 - **Proxies** H.264 générés en tâche de fond, bascule automatique.
 - **Rendu GPU** (OpenGL 3.3) : 40 effets vidéo, 18 transitions vidéo, masques animés, incrustation (Ultra Key),
   stabilisation, LUT .cube, titres animés, modes de fusion. Images clés avec interpolations (linéaire, Bézier, maintien).
@@ -58,6 +62,7 @@ raccord-cli presets                              préréglages d'export
 raccord-cli frame <projet> <secondes> <out.png>  rendu d'une image
 raccord-cli export <projet> <sortie> [préréglage] [séquence]
 raccord-cli assemble <out.raccord> <médias...>   projet bout à bout
+raccord-cli ofx-plugins                          plugins OpenFX chargés
 ```
 
 ## Traduction
@@ -74,5 +79,6 @@ et `lrelease i18n/raccord_fr.ts -qm i18n/raccord_fr.qm`.
 - `src/playback` : lecture temps réel
 - `src/export` : encodage, préréglages, proxies
 - `src/ai` : détection de plans/silences, recadrage, stabilisation, Whisper
+- `src/ofx` : hôte de plugins OpenFX
 - `src/interop` : FCP7 XML, EDL, OTIO, FCPXML, .prproj, sous-titres
 - `src/ui` : interface Qt

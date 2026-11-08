@@ -283,4 +283,11 @@ void GL::readbackFloat(const SurfaceRef &s, std::vector<float> &out)
     f->glReadPixels(0, 0, s->w, s->h, GL_RGBA, GL_FLOAT, out.data());
 }
 
+void GL::uploadFloat(const SurfaceRef &s, const float *data)
+{
+    f->glBindTexture(GL_TEXTURE_2D, s->tex);
+    f->glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+    f->glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, s->w, s->h, GL_RGBA, GL_FLOAT, data);
+}
+
 } // namespace rc

@@ -12,3 +12,13 @@ if(Qt6Test_FOUND)
   target_compile_definitions(raccord-uitest PRIVATE RACCORD_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
   target_link_libraries(raccord-uitest PRIVATE raccord_ui Qt6::Test)
 endif()
+
+# OpenFX test plugin, laid out as a standard bundle in the build tree.
+set(RACCORD_OFX_TEST_DIR ${CMAKE_CURRENT_BINARY_DIR}/ofx)
+add_library(raccord-ofx-test MODULE ofx/TestPlugin.cpp)
+target_include_directories(raccord-ofx-test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+set_target_properties(raccord-ofx-test PROPERTIES PREFIX "" OUTPUT_NAME "RaccordTest" SUFFIX ".ofx"
+  CXX_VISIBILITY_PRESET hidden
+  LIBRARY_OUTPUT_DIRECTORY ${RACCORD_OFX_TEST_DIR}/RaccordTest.ofx.bundle/Contents/Linux-x86-64)
+add_dependencies(raccord-tests raccord-ofx-test)
+target_compile_definitions(raccord-tests PRIVATE RACCORD_OFX_TEST_DIR="${RACCORD_OFX_TEST_DIR}")

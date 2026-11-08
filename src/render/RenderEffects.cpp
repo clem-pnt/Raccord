@@ -1,3 +1,4 @@
+#include "ofx/OfxHost.h"
 // Video effect and transition implementations for the Renderer.
 #include "Renderer.h"
 #include "Lut.h"
@@ -228,6 +229,29 @@ SurfaceRef Renderer::applyEffect(Ctx &c, const EffectInstance &e, Ticks local, S
     const float aspect = float(src->w) / std::max(1, src->h);
     const QString &t = e.type;
     (void)trackIndex;
+
+    if (ofx::Host::isOfxEffect(t)) {
+        // OpenFX plugins render on the CPU in float RGBA.
+        std::vector<float> in, out(size_t(src->w) * src->h * 4);
+        g.readbackFloat(src, in);
+        ofx::RenderArgs a;
+        a.src = in.data();
+        a.dst = out.data();
+        a.width = src->w;
+        a.height = src->h;
+        a.renderScale = c.renderScale;
+        a.fps = c.seq->fps.fps();
+        a.time = ticksToSeconds(local) * a.fps;
+        a.duration = ticksToSeconds(c.seq->duration()) * a.fps;
+        QString err;
+        if (!ofx::Host::instance().render(e, local, e.uid, a, &err)) {
+            if (!err.isEmpty()) qWarning("%s", qPrintable(err));
+            return {};
+        }
+        SurfaceRef res = g.surface(src->w, src->h);
+        g.uploadFloat(res, out.data());
+        return res;
+    }
 
     if (t == "lumetri") {
         int inN = 0, lookN = 0;

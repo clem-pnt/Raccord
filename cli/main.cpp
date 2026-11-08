@@ -4,6 +4,7 @@
 #include "export/Exporter.h"
 #include "media/MediaPool.h"
 #include "media/MediaProbe.h"
+#include "ofx/OfxHost.h"
 #include "render/Renderer.h"
 #include "render/Title.h"
 #include "Version.h"
@@ -23,7 +24,8 @@ static int usage()
                  "  presets                                           list export presets\n"
                  "  frame <project> <seconds> <out.png> [width]       render one frame\n"
                  "  export <project> <out> [preset-id] [sequence]     export a sequence\n"
-                 "  assemble <out.raccord> <media...>                 build a project with the media end to end\n");
+                 "  assemble <out.raccord> <media...>                 build a project with the media end to end\n"
+                 "  ofx-plugins                                       list loaded OpenFX plugins\n");
     return 2;
 }
 
@@ -56,6 +58,14 @@ int main(int argc, char **argv)
     if (args.isEmpty())
         return usage();
     const QString cmd = args.takeFirst();
+    ofx::Host::instance().loadPlugins();
+    if (cmd == "ofx-plugins") {
+        auto &h = ofx::Host::instance();
+        for (const auto &p : h.loadedPlugins()) std::printf("%s\n", qPrintable(p));
+        for (const auto &e : h.errors()) std::fprintf(stderr, "error: %s\n", qPrintable(e));
+        std::fprintf(stderr, "search path: %s\n", qPrintable(h.searchPaths().join(':')));
+        return 0;
+    }
 
     if (cmd == "probe" && args.size() >= 1) {
         MediaInfo info = probeMedia(args[0]);
@@ -70,7 +80,7 @@ int main(int argc, char **argv)
                 out << d->name << d->category;
                 for (const auto &p : d->params) { out << p.name << p.group; out << p.options; }
             }
-        for (const QString &id : {"motion", "opacity", "timeRemap", "volume", "panner"})
+        for (const char *id : {"motion", "opacity", "timeRemap", "volume", "panner"})
             if (const EffectDef *d = EffectRegistry::instance().find(id)) {
                 out << d->name;
                 for (const auto &p : d->params) { out << p.name << p.group; out << p.options; }
