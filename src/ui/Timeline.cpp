@@ -1,5 +1,6 @@
 #include "Timeline.h"
 #include "Icons.h"
+#include "Widgets.h"
 #include "MediaCache.h"
 #include "media/MediaProbe.h"
 #include "audio/AudioEffects.h"
@@ -502,7 +503,7 @@ void TimelineView::paintEvent(QPaintEvent *)
             if (trr.width() > 40) {
                 const EffectDef *d = EffectRegistry::instance().find(tr.effect.type);
                 p.setPen(Qt::white);
-                p.drawText(trr.adjusted(3, 0, -3, 0), Qt::AlignCenter, p.fontMetrics().elidedText(d ? d->name : tr.effect.type, Qt::ElideRight, int(trr.width()) - 6));
+                p.drawText(trr.adjusted(3, 0, -3, 0), Qt::AlignCenter, p.fontMetrics().elidedText(d ? trFx(d->name) : tr.effect.type, Qt::ElideRight, int(trr.width()) - 6));
             }
         }
         if (t.locked)

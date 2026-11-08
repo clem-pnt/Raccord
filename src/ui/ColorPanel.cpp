@@ -86,7 +86,7 @@ void ColorPanel::rebuild()
         QGridLayout *wheels = nullptr;
         int wheelCol = 0;
         auto flush = [&] {
-            if (content) v->addWidget(new Section(group, content, body, group == tr("Basic Correction") || group == "Basic Correction"));
+            if (content) v->addWidget(new Section(trFx(group), content, body, group == "Basic Correction"));
             content = nullptr;
         };
         for (const ParamDef &p : def->params) {
@@ -108,7 +108,7 @@ void ColorPanel::rebuild()
             }
             if (p.type == ParamType::Point && p.id.startsWith("wheel") && wheels) {
                 auto *col = new QVBoxLayout;
-                auto *lbl = new QLabel(p.name);
+                auto *lbl = new QLabel(trFx(p.name));
                 lbl->setAlignment(Qt::AlignCenter);
                 auto *w = new ColorWheel;
                 col->addWidget(lbl);
@@ -128,14 +128,14 @@ void ColorPanel::rebuild()
             QWidget *ed = params::editor(ref, p, refresh, content);
             m_refreshers.push_back(refresh);
             if (p.type == ParamType::Curve) {
-                auto *lbl = new QLabel("<b>" + p.name + "</b>");
+                auto *lbl = new QLabel("<b>" + trFx(p.name) + "</b>");
                 form->addRow(lbl);
                 form->addRow(ed);
             } else if (wheels && p.id.endsWith("Luma")) {
                 // Level slider under its wheel.
                 wheels->addWidget(ed, 1, wheelCol - 1);
             } else {
-                form->addRow(p.name, ed);
+                form->addRow(trFx(p.name), ed);
             }
         }
         flush();

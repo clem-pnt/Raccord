@@ -96,7 +96,7 @@ static Value current(const EffectRef &r, const QString &pid)
 QWidget *editor(const EffectRef &r, const ParamDef &def, std::function<void()> &refresh, QWidget *parent)
 {
     const QString pid = def.id;
-    const QString label = QObject::tr("Change %1").arg(def.name);
+    const QString label = QObject::tr("Change %1").arg(trFx(def.name));
     switch (def.type) {
     case ParamType::Float:
     case ParamType::Int:
@@ -122,7 +122,7 @@ QWidget *editor(const EffectRef &r, const ParamDef &def, std::function<void()> &
     }
     case ParamType::Enum: {
         auto *w = new QComboBox(parent);
-        w->addItems(def.options);
+        w->addItems(trFx(def.options));
         QObject::connect(w, QOverload<int>::of(&QComboBox::activated), w, [r, pid, label](int i) { set(r, pid, Value(double(i)), label); finish(); });
         refresh = [w, r, pid] { QSignalBlocker b(w); w->setCurrentIndex(current(r, pid).i()); };
         return w;
@@ -310,7 +310,7 @@ void EffectControls::rebuild()
     lay->setSpacing(0);
     if (trans) {
         const EffectDef *d = EffectRegistry::instance().find(trans->effect.type);
-        m_header->setText(tr("Transition: %1").arg(d ? d->name : trans->effect.type));
+        m_header->setText(tr("Transition: %1").arg(d ? trFx(d->name) : trans->effect.type));
         lay->addWidget(transitionBlock(*trans));
     } else if (clip) {
         m_header->setText(tr("Source: %1").arg(clip->name.isEmpty() ? clipSourceName(clip->source) : clip->name));
@@ -360,7 +360,7 @@ QWidget *EffectControls::paramRow(const EffectRef &ref, const ParamDef &def)
     watch->setToolTip(tr("Toggle animation"));
     watch->setVisible(def.animatable && def.type != ParamType::String && def.type != ParamType::File && def.type != ParamType::Text);
     l->addWidget(watch);
-    auto *name = new QLabel(def.name, row);
+    auto *name = new QLabel(trFx(def.name), row);
     name->setMinimumWidth(110);
     l->addWidget(name);
     std::function<void()> refresh;
@@ -424,7 +424,7 @@ QWidget *EffectControls::paramRow(const EffectRef &ref, const ParamDef &def)
     connect(next, &QToolButton::clicked, row, [=] { jump(1); });
     const Value defv = def.def;
     connect(reset, &QToolButton::clicked, row, [=] {
-        editParam(tr("Reset %1").arg(def.name), [defv](AnimatedParam &p, Ticks t) { p.setValue(defv, t); });
+        editParam(tr("Reset %1").arg(trFx(def.name)), [defv](AnimatedParam &p, Ticks t) { p.setValue(defv, t); });
     });
     // Keyframe context menu on the key button: interpolation.
     key->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -525,7 +525,7 @@ QWidget *EffectControls::maskBlock(const EffectRef &ref, int mi)
             Value v = (m->*member).valueAt(params::localTime(*seq, ref));
             for (int c = 0; c < (int)sl.size(); ++c) sl[c]->setValue(v.v[c]);
         });
-        f->addRow(tr(pp.name), box);
+        f->addRow(trFx(pp.name), box);
     }
     auto *inv = new QCheckBox(tr("Inverted"), w);
     connect(inv, &QCheckBox::clicked, w, [=](bool on) {
@@ -563,7 +563,7 @@ QWidget *EffectControls::effectBlock(const Clip &clip, const EffectInstance &fx,
         for (const auto &p : def->params) {
             if (p.group != group && !p.group.isEmpty()) {
                 group = p.group;
-                auto *g = new QLabel(p.group);
+                auto *g = new QLabel(trFx(p.group));
                 g->setContentsMargins(8, 6, 0, 2);
                 g->setStyleSheet("color: #9a9aa6; font-size: 10px; text-transform: uppercase;");
                 v->addWidget(g);
@@ -577,7 +577,7 @@ QWidget *EffectControls::effectBlock(const Clip &clip, const EffectInstance &fx,
         v->addWidget(t);
         v->addWidget(maskBlock(ref, i));
     }
-    auto *sec = new Section(def ? def->name : fx.type, content, nullptr, def && (def->intrinsic ? fx.type != "timeRemap" : true));
+    auto *sec = new Section(def ? trFx(def->name) : fx.type, content, nullptr, def && (def->intrinsic ? fx.type != "timeRemap" : true));
     auto *hdr = sec->headerWidget();
     auto *hl = static_cast<QHBoxLayout *>(hdr->layout());
     Session *s = Session::instance();
@@ -691,7 +691,7 @@ QWidget *EffectControls::transitionBlock(const Transition &t)
     const EffectDef *cur = EffectRegistry::instance().find(t.effect.type);
     const EffectKind kind = cur ? cur->kind : EffectKind::VideoTransition;
     for (const EffectDef *d : EffectRegistry::instance().all(kind))
-        type->addItem(d->name, d->id);
+        type->addItem(trFx(d->name), d->id);
     type->setCurrentIndex(type->findData(t.effect.type));
     connect(type, QOverload<int>::of(&QComboBox::activated), w, [=](int i) {
         const QString nt = type->itemData(i).toString();

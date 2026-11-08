@@ -1,10 +1,17 @@
 #pragma once
 // Reusable controls: scrubbable numbers, colour swatch, curves editor, colour wheel.
 #include "core/Param.h"
+#include <QCoreApplication>
+#include <QStringList>
 #include <QWidget>
 #include <vector>
 
 namespace rc {
+
+// Effect registry strings (names, parameters, groups, options) are translated
+// at display time in the "Effects" context.
+inline QString trFx(const QString &s) { return QCoreApplication::translate("Effects", s.toUtf8().constData()); }
+inline QStringList trFx(const QStringList &l) { QStringList o; for (const auto &s : l) o << trFx(s); return o; }
 
 // Premiere style "hot text" number: drag horizontally to change, click to type.
 class ValueSlider : public QWidget {

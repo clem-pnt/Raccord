@@ -1,5 +1,6 @@
 #include "ProjectPanel.h"
 #include "Icons.h"
+#include "Widgets.h"
 #include "MediaCache.h"
 #include "Timeline.h"
 #include "media/MediaProbe.h"
@@ -696,13 +697,13 @@ void EffectsBrowser::rebuild()
         root->setIcon(0, Icons::get("folder"));
         root->setFlags(root->flags() & ~Qt::ItemIsDragEnabled);
         for (const QString &cat : reg.categories(r.kind)) {
-            auto *ci = new QTreeWidgetItem(root, {cat});
+            auto *ci = new QTreeWidgetItem(root, {trFx(cat)});
             ci->setIcon(0, Icons::get("folder"));
             ci->setFlags(ci->flags() & ~Qt::ItemIsDragEnabled);
             for (const EffectDef *d : reg.all(r.kind)) {
                 if (d->category != cat) continue;
-                if (!f.isEmpty() && !d->name.contains(f, Qt::CaseInsensitive)) continue;
-                auto *it = new QTreeWidgetItem(ci, {d->name});
+                if (!f.isEmpty() && !d->name.contains(f, Qt::CaseInsensitive) && !trFx(d->name).contains(f, Qt::CaseInsensitive)) continue;
+                auto *it = new QTreeWidgetItem(ci, {trFx(d->name)});
                 it->setData(0, Qt::UserRole, d->id);
                 it->setIcon(0, Icons::get("fx"));
                 it->setToolTip(0, d->description);

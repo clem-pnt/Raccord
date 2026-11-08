@@ -29,6 +29,7 @@ int main(int argc, char **argv)
     QApplication::setApplicationVersion(RACCORD_VERSION);
     QApplication::setDesktopFileName("raccord");
 
+    Q_INIT_RESOURCE(ui);
     QTranslator qtTr, appTr;
     const QLocale loc;
     if (qtTr.load(loc, "qtbase", "_", QLibraryInfo::path(QLibraryInfo::TranslationsPath)))

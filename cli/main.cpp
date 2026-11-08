@@ -48,6 +48,9 @@ static Clip makeClip(const MediaItem &m, TrackType type, Ticks pos, Ticks dur, c
 
 int main(int argc, char **argv)
 {
+    // Headless servers: no display, use the offscreen platform (EGL/GLX pbuffers).
+    if (qEnvironmentVariableIsEmpty("DISPLAY") && qEnvironmentVariableIsEmpty("WAYLAND_DISPLAY") && qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM"))
+        qputenv("QT_QPA_PLATFORM", "offscreen");
     QGuiApplication app(argc, argv);
     QStringList args = app.arguments().mid(1);
     if (args.isEmpty())
@@ -58,6 +61,24 @@ int main(int argc, char **argv)
         MediaInfo info = probeMedia(args[0]);
         std::printf("%s\n", QJsonDocument(info.toJson()).toJson().constData());
         return info.valid ? 0 : 1;
+    }
+    if (cmd == "effect-strings") {
+        // All user visible strings of the effect registry (for translators).
+        QStringList out;
+        for (EffectKind k : {EffectKind::Video, EffectKind::Audio, EffectKind::VideoTransition, EffectKind::AudioTransition})
+            for (const EffectDef *d : EffectRegistry::instance().all(k)) {
+                out << d->name << d->category;
+                for (const auto &p : d->params) { out << p.name << p.group; out << p.options; }
+            }
+        for (const QString &id : {"motion", "opacity", "timeRemap", "volume", "panner"})
+            if (const EffectDef *d = EffectRegistry::instance().find(id)) {
+                out << d->name;
+                for (const auto &p : d->params) { out << p.name << p.group; out << p.options; }
+            }
+        out.removeDuplicates();
+        out.removeAll(QString());
+        for (const auto &s : out) std::printf("%s\n", qPrintable(s));
+        return 0;
     }
     if (cmd == "presets") {
         for (const auto &p : exportPresets())

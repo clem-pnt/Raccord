@@ -27,50 +27,52 @@ static inline float luma709(int r, int g, int b) { return (0.2126f * r + 0.7152f
 
 void ScopeView::recompute()
 {
-    const int W = std::max(1, width()), H = std::max(1, height());
-    m_plot = QImage(W, H, QImage::Format_RGB32);
-    m_plot.fill(QColor(14, 14, 16));
+    const int Wd = std::max(1, width()), Hd = std::max(1, height());
     if (m_frame.isNull()) {
+        m_plot = QImage(Wd, Hd, QImage::Format_RGB32);
+        m_plot.fill(QColor(14, 14, 16));
         update();
         return;
     }
     const int fw = m_frame.width(), fh = m_frame.height();
+    // Accumulate at a resolution matched to the source (one column per source
+    // pixel, 256 levels), then scale to the widget: no gaps between columns.
+    int W = fw, H = 256;
+    if (m_mode == Parade) W = fw * 3;
+    if (m_mode == Vectorscope) W = H = 256;
+    if (m_mode == Histogram) { W = 256; H = 128; }
     std::vector<float> acc[3];
     for (auto &a : acc) a.assign(size_t(W) * H, 0.f);
     auto plotAdd = [&](int ch, int x, int y, float v) {
         if (x < 0 || y < 0 || x >= W || y >= H) return;
         acc[ch][size_t(y) * W + x] += v;
     };
-    const float density = 40.0f * W * H / float(fw * fh) / 255.f;
+    // Each column receives fh samples spread over 256 levels.
+    const float density = (m_mode == Vectorscope ? 256.f * 256.f / float(fw * fh) : 256.f / float(fh)) * 6.f;
     if (m_mode == Waveform || m_mode == Parade) {
-        const int cols = m_mode == Parade ? 3 : 1;
-        const int colW = W / cols;
         for (int y = 0; y < fh; ++y) {
             const QRgb *line = reinterpret_cast<const QRgb *>(m_frame.constScanLine(y));
             for (int x = 0; x < fw; ++x) {
                 const int r = qRed(line[x]), g = qGreen(line[x]), b = qBlue(line[x]);
                 if (m_mode == Waveform) {
-                    const int px = x * W / fw;
                     const int py = int((1.0f - luma709(r, g, b)) * (H - 1));
-                    plotAdd(0, px, py, density); plotAdd(1, px, py, density); plotAdd(2, px, py, density);
+                    plotAdd(0, x, py, density); plotAdd(1, x, py, density); plotAdd(2, x, py, density);
                 } else {
                     const int v[3] = {r, g, b};
                     for (int c = 0; c < 3; ++c)
-                        plotAdd(c, c * colW + x * colW / fw, int((1.0f - v[c] / 255.f) * (H - 1)), density * 1.5f);
+                        plotAdd(c, c * fw + x, 255 - v[c], density);
                 }
             }
         }
     } else if (m_mode == Vectorscope) {
-        const int S = std::min(W, H) - 10;
-        const int cx = W / 2, cy = H / 2;
+        const int S = 240;
         for (int y = 0; y < fh; ++y) {
             const QRgb *line = reinterpret_cast<const QRgb *>(m_frame.constScanLine(y));
             for (int x = 0; x < fw; ++x) {
                 const float r = qRed(line[x]) / 255.f, g = qGreen(line[x]) / 255.f, b = qBlue(line[x]) / 255.f;
                 const float Y = 0.2126f * r + 0.7152f * g + 0.0722f * b;
                 const float cb = (b - Y) / 1.8556f, cr = (r - Y) / 1.5748f;
-                const int px = cx + int(cb * S), py = cy - int(cr * S);
-                // Tint the trace with the source colour.
+                const int px = 128 + int(cb * S), py = 128 - int(cr * S);
                 plotAdd(0, px, py, density * (0.4f + r));
                 plotAdd(1, px, py, density * (0.4f + g));
                 plotAdd(2, px, py, density * (0.4f + b));
@@ -91,20 +93,18 @@ void ScopeView::recompute()
         for (auto &h : hist) for (int i = 1; i < 255; ++i) mx = std::max(mx, h[i]);
         for (int c = 0; c < 3; ++c)
             for (int x = 0; x < W; ++x) {
-                const int bin = x * 256 / W;
-                const int top = H - 1 - int(std::min(1.0, double(hist[c][bin]) / mx) * (H - 4));
-                for (int y = top; y < H; ++y) acc[c][size_t(y) * W + x] = 0.5f;
+                const int top = H - 1 - int(std::min(1.0, double(hist[c][x]) / mx) * (H - 2));
+                for (int y = top; y < H; ++y) acc[c][size_t(y) * W + x] = 0.6f;
             }
     }
+    QImage plot(W, H, QImage::Format_RGB32);
     for (int y = 0; y < H; ++y) {
-        QRgb *out = reinterpret_cast<QRgb *>(m_plot.scanLine(y));
+        QRgb *out = reinterpret_cast<QRgb *>(plot.scanLine(y));
         for (int x = 0; x < W; ++x) {
             const size_t i = size_t(y) * W + x;
             float r = acc[0][i], g = acc[1][i], b = acc[2][i];
-            if (r == 0 && g == 0 && b == 0) continue;
             if (m_mode == Parade) {
-                const int col = x * 3 / W;
-                // Each third shows a single channel.
+                const int col = x / fw;
                 const float v = col == 0 ? r : col == 1 ? g : b;
                 r = col == 0 ? v : v * 0.25f;
                 g = col == 1 ? v : v * 0.25f;
@@ -112,9 +112,19 @@ void ScopeView::recompute()
             } else if (m_mode == Waveform) {
                 r *= 0.55f; b *= 0.6f;   // greenish trace
             }
-            auto tone = [](float v) { return int(255 * (1.0f - std::exp(-v * 1.6f))); };
+            auto tone = [](float v) { return int(240 * (1.0f - std::exp(-v * 0.9f))); };
             out[x] = qRgb(std::min(255, 14 + tone(r)), std::min(255, 14 + tone(g)), std::min(255, 16 + tone(b)));
         }
+    }
+    if (m_mode == Vectorscope) {
+        const int S = std::min(Wd, Hd);
+        m_plot = QImage(Wd, Hd, QImage::Format_RGB32);
+        m_plot.fill(QColor(14, 14, 16));
+        QPainter p(&m_plot);
+        p.setRenderHint(QPainter::SmoothPixmapTransform);
+        p.drawImage(QRect((Wd - S) / 2, (Hd - S) / 2, S, S), plot);
+    } else {
+        m_plot = plot.scaled(Wd, Hd, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
     }
     update();
 }
@@ -137,7 +147,7 @@ void ScopeView::paintEvent(QPaintEvent *)
         if (m_mode == Parade)
             for (int c = 1; c < 3; ++c) p.drawLine(c * W / 3, 0, c * W / 3, H);
     } else if (m_mode == Vectorscope) {
-        const int S = std::min(W, H) - 10;
+        const int S = int(std::min(W, H) * 240.0 / 256.0);
         const QPoint c(W / 2, H / 2);
         p.drawEllipse(c, int(S * 0.5), int(S * 0.5));
         p.drawLine(c.x() - S / 2, c.y(), c.x() + S / 2, c.y());

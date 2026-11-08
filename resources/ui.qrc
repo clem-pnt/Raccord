@@ -1,4 +1,5 @@
 <RCC>
-  <qresource prefix="/">
+  <qresource prefix="/i18n">
+    <file alias="raccord_fr.qm">../i18n/raccord_fr.qm</file>
   </qresource>
 </RCC>
