@@ -62,6 +62,14 @@ AVHWDeviceType preferredHwType()
         return AV_HWDEVICE_TYPE_VAAPI;
     if (s == "vulkan")
         return AV_HWDEVICE_TYPE_VULKAN;
+    if (s == "d3d11va" || s == "d3d11")
+        return AV_HWDEVICE_TYPE_D3D11VA;
+    if (s == "dxva2")
+        return AV_HWDEVICE_TYPE_DXVA2;
+#ifdef Q_OS_WIN
+    // auto on Windows: Direct3D 11 video decoding works on every GPU vendor.
+    return AV_HWDEVICE_TYPE_D3D11VA;
+#endif
     // auto: CUDA if an NVIDIA device exists, else VAAPI if a render node exists.
     if (QFileInfo::exists("/dev/nvidia0"))
         return AV_HWDEVICE_TYPE_CUDA;

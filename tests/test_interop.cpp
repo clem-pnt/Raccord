@@ -188,7 +188,9 @@ TEST_CASE("proxy generation")
     m.info = probeMedia(f);
     const QString out = proxyPathFor(dir.path(), m, 360);
     QString err;
-    REQUIRE(makeProxy(m, out, 360, {}, &err));
+    const bool made = makeProxy(m, out, 360, {}, &err);
+    INFO(err.toStdString());
+    REQUIRE(made);
     MediaInfo pi = probeMedia(out);
     REQUIRE(pi.valid);
     // Rotated 1280x720 source: proxy is portrait, rotation baked in.

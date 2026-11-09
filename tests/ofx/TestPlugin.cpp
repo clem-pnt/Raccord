@@ -149,5 +149,10 @@ OfxPlugin gPlugin = {kOfxImageEffectPluginApi, 1, "fr.raccord.test.Invert", 1, 0
 
 } // namespace
 
-extern "C" __attribute__((visibility("default"))) int OfxGetNumberOfPlugins(void) { return 1; }
-extern "C" __attribute__((visibility("default"))) OfxPlugin *OfxGetPlugin(int nth) { return nth == 0 ? &gPlugin : nullptr; }
+#ifdef _WIN32
+#define OFX_EXPORT extern "C" __declspec(dllexport)
+#else
+#define OFX_EXPORT extern "C" __attribute__((visibility("default")))
+#endif
+OFX_EXPORT int OfxGetNumberOfPlugins(void) { return 1; }
+OFX_EXPORT OfxPlugin *OfxGetPlugin(int nth) { return nth == 0 ? &gPlugin : nullptr; }

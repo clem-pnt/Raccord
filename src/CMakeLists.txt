@@ -5,9 +5,8 @@ add_library(raccord_engine STATIC ${ENGINE_SOURCES} ${CMAKE_SOURCE_DIR}/resource
 target_include_directories(raccord_engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_BINARY_DIR}/generated)
 target_link_libraries(raccord_engine PUBLIC Qt6::Core Qt6::Gui Qt6::OpenGL Qt6::Concurrent Qt6::Xml
   PkgConfig::FFMPEG Threads::Threads ZLIB::ZLIB)
-if(EBUR128_FOUND)
-  target_link_libraries(raccord_engine PUBLIC PkgConfig::EBUR128)
-  target_compile_definitions(raccord_engine PUBLIC RACCORD_HAVE_EBUR128=1)
+if(WIN32)
+  target_compile_definitions(raccord_engine PUBLIC _USE_MATH_DEFINES NOMINMAX)
 endif()
 
 file(GLOB_RECURSE UI_SOURCES CONFIGURE_DEPENDS ui/*.cpp ui/*.h playback/*.cpp playback/*.h)

@@ -3,6 +3,8 @@
 #include "media/FFmpeg.h"
 #include <QCoreApplication>
 #include <QDir>
+#include <QDirIterator>
+#include <QFileInfo>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -487,7 +489,14 @@ QString whisperHome()
     return QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + "/raccord/whisper";
 }
 
+#ifdef Q_OS_WIN
+// Windows: an embeddable Python shipped with Raccord ("python" next to the
+// executable) is copied to the user data folder on first install.
+static QString whisperPython() { return whisperHome() + "/python/python.exe"; }
+static QString bundledPython() { return QCoreApplication::applicationDirPath() + "/python"; }
+#else
 static QString whisperPython() { return whisperHome() + "/venv/bin/python3"; }
+#endif
 
 static QString helperScript()
 {
@@ -523,9 +532,10 @@ bool whisperAvailable(QString *detail)
     }
     QProcess p;
     p.start(whisperPython(), {"-c", "import faster_whisper; print(faster_whisper.__version__)"});
-    p.waitForFinished(20000);
-    const bool ok = p.exitCode() == 0;
-    if (detail) *detail = ok ? QObject::tr("faster-whisper %1").arg(QString::fromUtf8(p.readAllStandardOutput()).trimmed())
+    p.waitForFinished(60000);
+    const QString version = QString::fromUtf8(p.readAllStandardOutput()).trimmed();
+    const bool ok = p.exitStatus() == QProcess::NormalExit && p.exitCode() == 0 && !version.isEmpty();
+    if (detail) *detail = ok ? QObject::tr("faster-whisper %1").arg(version)
                              : QString::fromUtf8(p.readAllStandardError()).trimmed();
     return ok;
 }
@@ -550,6 +560,38 @@ bool installWhisper(const std::function<void(const QString &)> &log, QString *er
         }
         return true;
     };
+#ifdef Q_OS_WIN
+    if (!QFile::exists(whisperPython())) {
+        const QString src = bundledPython();
+        if (!QFile::exists(src + "/python.exe")) {
+            if (error) *error = QObject::tr("The Python runtime shipped with Raccord is missing (%1)").arg(src);
+            return false;
+        }
+        // Copy the runtime, then enable site-packages (embeddable builds disable it).
+        const QString dst = whisperHome() + "/python";
+        QDirIterator it(src, QDir::Files | QDir::Hidden, QDirIterator::Subdirectories);
+        while (it.hasNext()) {
+            const QString f = it.next();
+            const QString target = dst + f.mid(src.size());
+            QDir().mkpath(QFileInfo(target).absolutePath());
+            QFile::remove(target);
+            QFile::copy(f, target);
+        }
+        for (const QFileInfo &pth : QDir(dst).entryInfoList({"python*._pth"}, QDir::Files)) {
+            QFile f(pth.absoluteFilePath());
+            if (f.open(QIODevice::ReadOnly)) {
+                QString text = QString::fromUtf8(f.readAll());
+                f.close();
+                text.replace("#import site", "import site");
+                if (!text.contains("Lib\\site-packages")) text += "\nLib\\site-packages\n";
+                if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) f.write(text.toUtf8());
+            }
+        }
+        if (log) log(QObject::tr("Installing pip..."));
+        if (!run(whisperPython(), {dst + "/get-pip.py", "--no-warn-script-location"}))
+            return false;
+    }
+#else
     const QString py = QStandardPaths::findExecutable("python3");
     if (py.isEmpty()) {
         if (error) *error = QObject::tr("python3 is required to install the transcription engine");
@@ -557,6 +599,7 @@ bool installWhisper(const std::function<void(const QString &)> &log, QString *er
     }
     if (!QFile::exists(whisperPython()) && !run(py, {"-m", "venv", whisperHome() + "/venv"}))
         return false;
+#endif
     if (!run(whisperPython(), {"-m", "pip", "install", "--upgrade", "pip"}))
         return false;
     return run(whisperPython(), {"-m", "pip", "install", "faster-whisper"});
@@ -599,8 +642,11 @@ std::vector<Segment> transcribe(const QString &path, int audioStream, Ticks in, 
                                 const Progress &progress, QString *error)
 {
     std::vector<Segment> segs;
-    if (!whisperAvailable(error))
+    QString detail;
+    if (!whisperAvailable(&detail)) {
+        if (error) *error = detail;
         return segs;
+    }
     QTemporaryDir tmp;
     const QString wav = tmp.path() + "/audio.wav";
     if (!writeWav16k(path, audioStream, in, out, wav, error))

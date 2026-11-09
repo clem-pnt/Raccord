@@ -125,7 +125,12 @@ bool Encoder::openVideo(const ExportSettings &s, QString *error)
         av_dict_set(&o, "preset", s.encoderPreset.toUtf8().constData(), 0);
         if (s.rateControl == "crf") av_dict_set_int(&o, "crf", s.quality, 0);
         av_dict_set(&o, "x264-params", "colorprim=bt709:transfer=bt709:colormatrix=bt709", 0);
-        if (!s.tenBit) m_vctx->profile = FF_PROFILE_H264_HIGH;
+        if (!s.tenBit) m_vctx->profile =
+#ifdef AV_PROFILE_H264_HIGH
+            AV_PROFILE_H264_HIGH;
+#else
+            FF_PROFILE_H264_HIGH;
+#endif
     } else if (v == "hevc") {
         pix = s.tenBit ? AV_PIX_FMT_YUV420P10LE : AV_PIX_FMT_YUV420P;
         av_dict_set(&o, "preset", s.encoderPreset.toUtf8().constData(), 0);
@@ -232,9 +237,16 @@ bool Encoder::openAudio(const ExportSettings &s, QString *error)
     av_channel_layout_default(&m_actx->ch_layout, m_channels);
     // Pick a supported sample format.
     AVSampleFormat want = AV_SAMPLE_FMT_FLTP;
-    if (codec->sample_fmts) {
-        want = codec->sample_fmts[0];
-        for (const AVSampleFormat *f = codec->sample_fmts; *f != AV_SAMPLE_FMT_NONE; ++f)
+    const AVSampleFormat *fmts = nullptr;
+#if LIBAVCODEC_VERSION_MAJOR >= 61
+    int nfmts = 0;
+    avcodec_get_supported_config(m_actx, codec, AV_CODEC_CONFIG_SAMPLE_FORMAT, 0, reinterpret_cast<const void **>(&fmts), &nfmts);
+#else
+    fmts = codec->sample_fmts;
+#endif
+    if (fmts) {
+        want = fmts[0];
+        for (const AVSampleFormat *f = fmts; *f != AV_SAMPLE_FMT_NONE; ++f)
             if (*f == AV_SAMPLE_FMT_FLTP || *f == AV_SAMPLE_FMT_FLT || (a == "pcm24" && *f == AV_SAMPLE_FMT_S32)) {
                 want = *f;
                 break;
@@ -365,6 +377,9 @@ bool Encoder::finish(QString *error)
         ok = false;
         if (error) *error = ff::errorString(r);
     }
+    // Close the file now: on Windows an open file cannot be renamed or moved.
+    if (!(m_out->oformat->flags & AVFMT_NOFILE) && m_out->pb)
+        avio_closep(&m_out->pb);
     return ok;
 }
 

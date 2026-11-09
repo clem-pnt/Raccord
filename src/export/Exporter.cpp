@@ -7,9 +7,7 @@
 #include <QFileInfo>
 #include <QOffscreenSurface>
 #include <QOpenGLContext>
-#ifdef RACCORD_HAVE_EBUR128
-#include <ebur128.h>
-#endif
+#include "audio/Loudness.h"
 
 namespace rc {
 
@@ -54,11 +52,8 @@ void OffscreenGL::destroy()
 
 double Exporter::measureLoudness(const Project &project, const Sequence &seq, TimeRange range, double *truePeakDb)
 {
-#ifdef RACCORD_HAVE_EBUR128
     const int ch = std::max(1, seq.audioChannels);
-    ebur128_state *st = ebur128_init(ch, seq.sampleRate, EBUR128_MODE_I | EBUR128_MODE_TRUE_PEAK);
-    if (!st)
-        return 0;
+    LoudnessMeter meter(ch, seq.sampleRate);
     AudioMixer mixer;
     const int block = 4096;
     std::vector<float> buf(size_t(block) * ch);
@@ -66,25 +61,13 @@ double Exporter::measureLoudness(const Project &project, const Sequence &seq, Ti
     for (int64_t p = s0; p < s1; p += block) {
         int n = int(std::min<int64_t>(block, s1 - p));
         mixer.mix(project, seq, p, n, buf.data());
-        ebur128_add_frames_float(st, buf.data(), n);
+        meter.add(buf.data(), n);
     }
-    double lufs = 0;
-    ebur128_loudness_global(st, &lufs);
     if (truePeakDb) {
-        double peak = 0;
-        for (int c = 0; c < ch; ++c) {
-            double p = 0;
-            ebur128_true_peak(st, c, &p);
-            peak = std::max(peak, p);
-        }
+        const double peak = meter.truePeak();
         *truePeakDb = peak > 0 ? 20 * std::log10(peak) : -120;
     }
-    ebur128_destroy(&st);
-    return std::isfinite(lufs) ? lufs : -70;
-#else
-    (void)project; (void)seq; (void)range; (void)truePeakDb;
-    return 0;
-#endif
+    return meter.integratedLufs();
 }
 
 bool Exporter::run(const Project &project, const QString &sequenceId, const ExportSettings &sIn, QOffscreenSurface *surface,

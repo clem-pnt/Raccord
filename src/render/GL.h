@@ -11,6 +11,13 @@
 
 namespace rc {
 
+// True when an OpenGL 3.3 core context can be created (needs a Q(Gui)Application).
+bool openGlCoreAvailable();
+// Windows: when the driver lacks OpenGL 3.3, relaunches the process with the
+// bundled software renderer (opengl32sw.dll), waits for it and returns true
+// with its exit code: the caller must then exit with that code.
+bool relaunchWithSoftwareGlIfNeeded(int *exitCode);
+
 class GL;
 
 // A colour texture with its framebuffer, returned to the pool when released.

@@ -1,4 +1,5 @@
 // raccord-cli: headless tools (probe, render a frame, export, build a project).
+#include "ai/Analysis.h"
 #include "core/Document.h"
 #include "core/Edit.h"
 #include "export/Exporter.h"
@@ -25,7 +26,9 @@ static int usage()
                  "  frame <project> <seconds> <out.png> [width]       render one frame\n"
                  "  export <project> <out> [preset-id] [sequence]     export a sequence\n"
                  "  assemble <out.raccord> <media...>                 build a project with the media end to end\n"
-                 "  ofx-plugins                                       list loaded OpenFX plugins\n");
+                 "  ofx-plugins                                       list loaded OpenFX plugins\n"
+                 "  whisper-install                                   install the speech-to-text engine\n"
+                 "  transcribe <media> [language|auto] [model]        print a transcription\n");
     return 2;
 }
 
@@ -51,14 +54,41 @@ static Clip makeClip(const MediaItem &m, TrackType type, Ticks pos, Ticks dur, c
 int main(int argc, char **argv)
 {
     // Headless servers: no display, use the offscreen platform (EGL/GLX pbuffers).
+#ifndef Q_OS_WIN
     if (qEnvironmentVariableIsEmpty("DISPLAY") && qEnvironmentVariableIsEmpty("WAYLAND_DISPLAY") && qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM"))
         qputenv("QT_QPA_PLATFORM", "offscreen");
+#endif
     QGuiApplication app(argc, argv);
     QStringList args = app.arguments().mid(1);
     if (args.isEmpty())
         return usage();
     const QString cmd = args.takeFirst();
+    if ((cmd == "frame" || cmd == "export") && qEnvironmentVariable("QT_OPENGL") != "software")
+        if (int code = 0; relaunchWithSoftwareGlIfNeeded(&code))
+            return code;
     ofx::Host::instance().loadPlugins();
+    if (cmd == "whisper-install") {
+        QString err;
+        const bool ok = ai::installWhisper([](const QString &l) { std::fprintf(stderr, "%s", qPrintable(l)); if (!l.endsWith('\n')) std::fprintf(stderr, "\n"); }, &err);
+        if (!ok) std::fprintf(stderr, "error: %s\n", qPrintable(err));
+        QString detail;
+        const bool avail = ai::whisperAvailable(&detail);
+        std::printf("%s\n", qPrintable(detail));
+        return ok && avail ? 0 : 1;
+    }
+    if (cmd == "transcribe" && args.size() >= 1) {
+        // transcribe <media> [language|auto] [model]
+        const MediaInfo info = probeMedia(args[0]);
+        if (!info.valid) { std::fprintf(stderr, "cannot read %s\n", qPrintable(args[0])); return 1; }
+        QString err;
+        const auto segs = ai::transcribe(args[0], 0, 0, info.duration, args.value(2, "base"), args.value(1, "auto"),
+                                         [](double f) { std::fprintf(stderr, "\r%5.1f%%", f * 100); return true; }, &err);
+        std::fprintf(stderr, "\n");
+        if (!err.isEmpty()) { std::fprintf(stderr, "error: %s\n", qPrintable(err)); return 1; }
+        for (const auto &sg : segs)
+            std::printf("%8.2f %8.2f  %s\n", ticksToSeconds(sg.start), ticksToSeconds(sg.end), qPrintable(sg.text));
+        return segs.empty() ? 1 : 0;
+    }
     if (cmd == "ofx-plugins") {
         auto &h = ofx::Host::instance();
         for (const auto &p : h.loadedPlugins()) std::printf("%s\n", qPrintable(p));

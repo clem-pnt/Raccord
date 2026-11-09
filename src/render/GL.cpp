@@ -1,3 +1,6 @@
+#include <QCoreApplication>
+#include <QProcess>
+#include <QOffscreenSurface>
 #include "GL.h"
 #include <QOpenGLContext>
 #include <QOpenGLVersionFunctionsFactory>
@@ -288,6 +291,44 @@ void GL::uploadFloat(const SurfaceRef &s, const float *data)
     f->glBindTexture(GL_TEXTURE_2D, s->tex);
     f->glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
     f->glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, s->w, s->h, GL_RGBA, GL_FLOAT, data);
+}
+
+bool openGlCoreAvailable()
+{
+    QOffscreenSurface surface;
+    surface.setFormat(QSurfaceFormat::defaultFormat());
+    surface.create();
+    QOpenGLContext ctx;
+    QSurfaceFormat f = QSurfaceFormat::defaultFormat();
+    f.setVersion(3, 3);
+    f.setProfile(QSurfaceFormat::CoreProfile);
+    ctx.setFormat(f);
+    if (!ctx.create() || !ctx.makeCurrent(&surface))
+        return false;
+    const QSurfaceFormat got = ctx.format();
+    const bool ok = got.majorVersion() * 10 + got.minorVersion() >= 33;
+    ctx.doneCurrent();
+    return ok;
+}
+
+bool relaunchWithSoftwareGlIfNeeded(int *exitCode)
+{
+#ifdef Q_OS_WIN
+    if (qEnvironmentVariable("QT_OPENGL") == "software" || openGlCoreAvailable())
+        return false;
+    qputenv("QT_OPENGL", "software");
+    QProcess p;
+    p.setProgram(QCoreApplication::applicationFilePath());
+    p.setArguments(QCoreApplication::arguments().mid(1));
+    p.setProcessChannelMode(QProcess::ForwardedChannels);
+    p.start();
+    p.waitForFinished(-1);
+    if (exitCode) *exitCode = p.exitCode();
+    return true;
+#else
+    (void)exitCode;
+    return false;
+#endif
 }
 
 } // namespace rc

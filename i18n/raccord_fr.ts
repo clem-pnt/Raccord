@@ -3,42 +3,52 @@
   <context>
     <name>QObject</name>
     <message>
-      <location filename="../src/ai/Analysis.cpp" line="28" />
+      <location filename="../src/ai/Analysis.cpp" line="30" />
       <source>No video stream</source>
       <translation>Aucun flux vidéo</translation>
     </message>
     <message>
-      <location filename="../src/ai/Analysis.cpp" line="38" />
+      <location filename="../src/ai/Analysis.cpp" line="40" />
       <source>Cannot open decoder</source>
       <translation>Impossible d'ouvrir le décodeur</translation>
     </message>
     <message>
-      <location filename="../src/ai/Analysis.cpp" line="521" />
+      <location filename="../src/ai/Analysis.cpp" line="530" />
       <source>Transcription engine not installed</source>
       <translation>Moteur de transcription non installé</translation>
     </message>
     <message>
-      <location filename="../src/ai/Analysis.cpp" line="528" />
+      <location filename="../src/ai/Analysis.cpp" line="538" />
       <source>faster-whisper %1</source>
       <translation>faster-whisper %1</translation>
     </message>
     <message>
-      <location filename="../src/ai/Analysis.cpp" line="541" />
+      <location filename="../src/ai/Analysis.cpp" line="551" />
       <source>Cannot start %1</source>
       <translation>Impossible de lancer %1</translation>
     </message>
     <message>
-      <location filename="../src/ai/Analysis.cpp" line="548" />
+      <location filename="../src/ai/Analysis.cpp" line="558" />
       <source>%1 failed (exit code %2)</source>
       <translation>%1 a échoué (code %2)</translation>
     </message>
     <message>
-      <location filename="../src/ai/Analysis.cpp" line="555" />
+      <location filename="../src/ai/Analysis.cpp" line="567" />
+      <source>The Python runtime shipped with Raccord is missing (%1)</source>
+      <translation>Le Python fourni avec Raccord est introuvable (%1)</translation>
+    </message>
+    <message>
+      <location filename="../src/ai/Analysis.cpp" line="590" />
+      <source>Installing pip...</source>
+      <translation>Installation de pip...</translation>
+    </message>
+    <message>
+      <location filename="../src/ai/Analysis.cpp" line="597" />
       <source>python3 is required to install the transcription engine</source>
       <translation>python3 est nécessaire pour installer le moteur de transcription</translation>
     </message>
     <message>
-      <location filename="../src/ai/Analysis.cpp" line="611" />
+      <location filename="../src/ai/Analysis.cpp" line="657" />
       <source>Cannot start the transcription engine</source>
       <translation>Impossible de lancer le moteur de transcription</translation>
     </message>
@@ -129,12 +139,12 @@
       <translation>Clic : ajouter, clic droit : supprimer, double-clic : réinitialiser</translation>
     </message>
     <message>
-      <location filename="../app/main.cpp" line="42" />
+      <location filename="../app/main.cpp" line="45" />
       <source>Raccord video editor</source>
       <translation>Raccord, logiciel de montage vidéo</translation>
     </message>
     <message>
-      <location filename="../app/main.cpp" line="45" />
+      <location filename="../app/main.cpp" line="48" />
       <source>Project (.raccord, .prproj, .xml, .otio, .edl) or media files to open</source>
       <translation>Projet (.raccord, .prproj, .xml, .otio, .edl) ou médias à ouvrir</translation>
     </message>
@@ -3489,7 +3499,7 @@ pour l'ouvrir ici</translation>
   <context>
     <name>rc::ai</name>
     <message>
-      <location filename="../src/ai/Analysis.cpp" line="221" />
+      <location filename="../src/ai/Analysis.cpp" line="223" />
       <source>The first clip has no usable audio.</source>
       <translation>Le premier élément n'a pas d'audio exploitable.</translation>
     </message>

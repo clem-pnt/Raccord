@@ -11,6 +11,8 @@ import sys
 import xml.etree.ElementTree as ET
 
 UI = {
+    "The Python runtime shipped with Raccord is missing (%1)": "Le Python fourni avec Raccord est introuvable (%1)",
+    "Installing pip...": "Installation de pip...",
     # OpenFX
     "OpenFX Plugins...": "Plugins OpenFX...",
     "OpenFX Plugins": "Plugins OpenFX",

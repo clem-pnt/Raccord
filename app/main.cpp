@@ -3,6 +3,7 @@
 #include "ui/Icons.h"
 #include "ui/MainWindow.h"
 #include "ofx/OfxHost.h"
+#include "render/GL.h"
 #include "ui/Session.h"
 #include <QApplication>
 #include <QCommandLineParser>
@@ -29,6 +30,8 @@ int main(int argc, char **argv)
     QApplication::setOrganizationName("Raccord");
     QApplication::setApplicationVersion(RACCORD_VERSION);
     QApplication::setDesktopFileName("raccord");
+    if (int code = 0; rc::relaunchWithSoftwareGlIfNeeded(&code))
+        return code;
 
     Q_INIT_RESOURCE(ui);
     QTranslator qtTr, appTr;

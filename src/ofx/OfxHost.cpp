@@ -868,7 +868,13 @@ QStringList Host::searchPaths() const
 {
     QStringList dirs;
     for (const QString &p : qEnvironmentVariable("OFX_PLUGIN_PATH").split(':', Qt::SkipEmptyParts)) dirs << p;
+#ifdef Q_OS_WIN
+    const QString common = qEnvironmentVariable("CommonProgramFiles", "C:/Program Files/Common Files");
+    dirs << QDir::fromNativeSeparators(common) + "/OFX/Plugins";
+    dirs
+#else
     dirs << "/usr/OFX/Plugins" << "/usr/local/OFX/Plugins"
+#endif
          << QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + "/raccord/ofx";
     return dirs;
 }
@@ -892,7 +898,11 @@ int Host::loadPlugins(const QStringList &extra)
         QDir root(dir);
         if (!root.exists()) continue;
         for (const QFileInfo &bundle : root.entryInfoList({"*.ofx.bundle"}, QDir::Dirs | QDir::NoDotAndDotDot)) {
+#ifdef Q_OS_WIN
+            QDir bin(bundle.absoluteFilePath() + "/Contents/Win64");
+#else
             QDir bin(bundle.absoluteFilePath() + "/Contents/Linux-x86-64");
+#endif
             for (const QFileInfo &f : bin.entryInfoList({"*.ofx"}, QDir::Files))
                 d->loadBinary(f.absoluteFilePath());
         }

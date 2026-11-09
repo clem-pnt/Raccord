@@ -1,3 +1,4 @@
+#include <QFont>
 #include "Icons.h"
 #include <QApplication>
 #include <QHash>
@@ -126,6 +127,9 @@ QIcon Icons::get(const QString &name)
 void applyTheme(QApplication &app)
 {
     app.setStyle(QStyleFactory::create("Fusion"));
+#ifdef Q_OS_WIN
+    app.setFont(QFont("Segoe UI", 9));
+#endif
     QPalette p;
     p.setColor(QPalette::Window, QColor(32, 32, 36));
     p.setColor(QPalette::WindowText, QColor(214, 214, 220));
@@ -150,8 +154,8 @@ void applyTheme(QApplication &app)
         QTabBar::tab { background: #26262b; color: #a8a8b2; padding: 5px 12px; border: none; }
         QTabBar::tab:selected { color: #ffffff; border-bottom: 2px solid #4a90ff; background: #2c2c32; }
         QToolTip { border: 1px solid #44444c; padding: 4px; }
-        QLabel#timecode { color: #4a90ff; font-family: monospace; font-size: 15px; font-weight: 600; }
-        QLabel#timecodeDim { color: #8a8a96; font-family: monospace; font-size: 13px; }
+        QLabel#timecode { color: #4a90ff; font-family: "Consolas", "DejaVu Sans Mono", monospace; font-size: 15px; font-weight: 600; }
+        QLabel#timecodeDim { color: #8a8a96; font-family: "Consolas", "DejaVu Sans Mono", monospace; font-size: 13px; }
         QLabel#monitorTitle { color: #a8a8b2; padding: 2px 4px; }
         QToolButton { padding: 3px; border-radius: 3px; }
         QToolButton:hover { background: #3a3a42; }

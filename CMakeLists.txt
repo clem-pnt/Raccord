@@ -25,10 +25,18 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 endif()
 
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets OpenGL OpenGLWidgets Multimedia Concurrent Xml)
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
-  libavformat libavcodec libavutil libswscale libswresample libavfilter)
-pkg_check_modules(EBUR128 IMPORTED_TARGET libebur128)
+if(WIN32 AND RACCORD_FFMPEG_WIN)
+  # Prebuilt shared FFmpeg (include/, lib/*.dll.a, bin/*.dll).
+  add_library(PkgConfig::FFMPEG INTERFACE IMPORTED)
+  target_include_directories(PkgConfig::FFMPEG INTERFACE ${RACCORD_FFMPEG_WIN}/include)
+  foreach(l avformat avcodec avutil swscale swresample avfilter)
+    target_link_libraries(PkgConfig::FFMPEG INTERFACE ${RACCORD_FFMPEG_WIN}/lib/lib${l}.dll.a)
+  endforeach()
+else()
+  find_package(PkgConfig REQUIRED)
+  pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
+    libavformat libavcodec libavutil libswscale libswresample libavfilter)
+endif()
 find_package(Threads REQUIRED)
 find_package(ZLIB REQUIRED)
 

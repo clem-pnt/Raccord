@@ -157,7 +157,7 @@ MediaInfo probeMedia(const QString &path)
 #if LIBAVUTIL_VERSION_MAJOR >= 57 && LIBAVUTIL_VERSION_MINOR >= 24
         info.channels = par->ch_layout.nb_channels;
 #else
-        info.channels = par->channels;
+        info.channels = par->ch_layout.nb_channels;
 #endif
         const AVCodecDescriptor *cd = avcodec_descriptor_get(par->codec_id);
         info.audioCodec = cd ? QString::fromUtf8(cd->name) : QString();
