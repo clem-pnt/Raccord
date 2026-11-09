@@ -20,7 +20,7 @@ jobs:
           apt-get install -y --no-install-recommends git ca-certificates curl file cmake ninja-build g++ pkg-config \
             qt6-base-dev qt6-base-dev-tools libqt6opengl6-dev qt6-multimedia-dev qt6-l10n-tools qt6-tools-dev-tools \
             libgl-dev libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libswresample-dev libavfilter-dev \
-            libebur128-dev zlib1g-dev catch2 xvfb xauth libgl1-mesa-dri dpkg-dev
+            libebur128-dev zlib1g-dev catch2 xvfb xauth libgl1-mesa-dri dpkg-dev patchelf
       - uses: actions/checkout@v4
       - name: Configure
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DRACCORD_BUILD_TESTS=ON
@@ -28,14 +28,14 @@ jobs:
         run: cmake --build build
       - name: Tests
         run: cd build && xvfb-run -a ctest --output-on-failure
-      - name: Debian package
-        run: cd build && cpack -G DEB
       - name: AppImage
         run: |
           mkdir -p .tools
           curl -fL -o .tools/appimagetool-x86_64.AppImage https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x .tools/appimagetool-x86_64.AppImage
           packaging/build-appimage.sh build
+      - name: Debian package
+        run: packaging/build-deb.sh build
       - uses: actions/upload-artifact@v4
         with:
           name: raccord-linux

@@ -36,7 +36,7 @@ Interface, raccourcis et échanges de projets pensés pour les monteurs qui vien
 Les versions publiées (paquet `.deb` et AppImage) sont générées par la CI à chaque tag `v*`.
 
 ```sh
-sudo apt install ./raccord_0.1.0_amd64.deb      # Debian 12+, Ubuntu 23.04+
+sudo apt install ./raccord_0.1.0-2_amd64.deb    # Debian 12+, Ubuntu 24.04+ et dérivées
 chmod +x Raccord-0.1.0-x86_64.AppImage && ./Raccord-0.1.0-x86_64.AppImage
 ```
 
@@ -58,8 +58,8 @@ sudo apt install cmake ninja-build g++ pkg-config qt6-base-dev libqt6opengl6-dev
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DRACCORD_BUILD_TESTS=ON
 cmake --build build
 ctest --test-dir build                 # tests du moteur
-cd build && cpack -G DEB               # paquet .deb
 packaging/build-appimage.sh build      # AppImage (nécessite appimagetool)
+packaging/build-deb.sh build           # paquet .deb autonome, Qt et FFmpeg inclus (nécessite patchelf)
 ```
 
 `libebur128-dev` est facultatif : il sert seulement à un test qui compare la mesure de sonie interne à cette bibliothèque.
